@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from "react";
+import underdawgzLogo from "./assets/underdawgz.png";
+import lifemaxxingLogo from "./assets/lifemaxxing.png";
 
 /* ─── COURSES ────────────────────────────────────────────────── */
 const COURSES = {
@@ -26,8 +28,10 @@ const COURSES = {
 const COURSE_KEYS = Object.keys(COURSES);
 
 /* ─── TEAMS ──────────────────────────────────────────────────── */
-const TEAM_A = { name:"Blue", players:["Mark","Brian","Paul","James"] };
-const TEAM_B = { name:"Rust", players:["Adam","Casey","Michael","Timothy"] };
+const TEAM_A = { name:"UnderDawgz",  short:"Dawgz",    logo:underdawgzLogo,
+                 players:["Mark","Brian","Paul","James"] };
+const TEAM_B = { name:"Lifemaxxing", short:"Lifemaxx", logo:lifemaxxingLogo,
+                 players:["Adam","Casey","Michael","Timothy"] };
 const ALL = [...TEAM_A.players, ...TEAM_B.players];
 const teamOf = p => TEAM_A.players.includes(p) ? "A" : "B";
 
@@ -222,8 +226,12 @@ export default function App() {
     <div className="app">
       <header className="top">
         <div><div className="wordmark">BETS</div><div className="tag">St. George · Sept 10–13</div></div>
-        <div className="tally"><span className="tA">{fmt(totals.a)}</span>
-          <span className="dash">–</span><span className="tB">{fmt(totals.b)}</span></div>
+        <div className="tally">
+          <img className="tick" src={TEAM_A.logo} alt={TEAM_A.name}/>
+          <span className="tA">{fmt(totals.a)}</span>
+          <span className="dash">–</span><span className="tB">{fmt(totals.b)}</span>
+          <img className="tick" src={TEAM_B.logo} alt={TEAM_B.name}/>
+        </div>
       </header>
       <div className="roundbar">
         <select value={roundN} onChange={e=>setRoundN(+e.target.value)}>
@@ -255,9 +263,15 @@ const cls = (v,par) => v==null ? "" :
 /* ─── SHARED ─────────────────────────────────────────────────── */
 const Big = ({a,b,mid,sub}) => (
   <div className="bigscore">
-    <div className="side sideA"><div className="sname">Team {TEAM_A.name}</div><div className="sval">{fmt(a)}</div></div>
+    <div className="side sideA">
+      <div className="crest"><img src={TEAM_A.logo} alt={TEAM_A.name}/></div>
+      <div className="sname">{TEAM_A.name}</div><div className="sval">{fmt(a)}</div>
+    </div>
     <div className="mid"><div className="midlabel">{mid}</div>{sub&&<div className="midsub">{sub}</div>}</div>
-    <div className="side sideB"><div className="sname">Team {TEAM_B.name}</div><div className="sval">{fmt(b)}</div></div>
+    <div className="side sideB">
+      <div className="crest"><img src={TEAM_B.logo} alt={TEAM_B.name}/></div>
+      <div className="sname">{TEAM_B.name}</div><div className="sval">{fmt(b)}</div>
+    </div>
   </div>
 );
 const Tracker = ({ev}) => (
@@ -445,7 +459,7 @@ function GroupCard({gi,group,course,R,ev,setScore}) {
       </div>
       <div className="legend">
         {(f.scope==="group"||f.scope==="group2") && (<>
-          <span>▲ {TEAM_A.name} wins hole</span><span>▼ {TEAM_B.name} wins hole</span><span>– halved</span></>)}
+          <span>▲ {TEAM_A.short} wins hole</span><span>▼ {TEAM_B.short} wins hole</span><span>– halved</span></>)}
         <span>• stroke received</span>
       </div>
     </div>
@@ -465,10 +479,10 @@ function CombinedStrip({ev,sf}) {
         <table className="card">
           <thead><tr><th className="stick">Hole</th>{H.map(h=><th key={h}>{h+1}</th>)}<th>Tot</th></tr></thead>
           <tbody>
-            <tr className="tA"><th className="stick">Team {TEAM_A.name}</th>
+            <tr className="tA"><th className="stick"><img className="tick sm-crest" src={TEAM_A.logo} alt=""/>{TEAM_A.name}</th>
               {H.map(h=><td key={h} className={m.holes[h].w==="A"?"rA":""}>{m.holes[h].a ?? "·"}</td>)}
               <td className="tot">{m.aT}</td></tr>
-            <tr className="tB"><th className="stick">Team {TEAM_B.name}</th>
+            <tr className="tB"><th className="stick"><img className="tick sm-crest" src={TEAM_B.logo} alt=""/>{TEAM_B.name}</th>
               {H.map(h=><td key={h} className={m.holes[h].w==="B"?"rB":""}>{m.holes[h].b ?? "·"}</td>)}
               <td className="tot">{m.bT}</td></tr>
             <tr className="resrow"><th className="stick">Running</th>
@@ -513,14 +527,14 @@ function HoleEntry({R,course,hole,setHole,setScore,ev}) {
           {ev.results.filter(r=>r.group===gi).map(m=>{
             const x=m.holes[hole];
             return <div className="holeres" key={m.key}>
-              <span>{m.a.join("/")} v {m.b.join("/")} — {x.w==="A"?`${TEAM_A.name} wins`:x.w==="B"?`${TEAM_B.name} wins`:x.w==="H"?"Halved":"—"}</span>
+              <span>{m.a.join("/")} v {m.b.join("/")} — {x.w==="A"?`${TEAM_A.short} wins`:x.w==="B"?`${TEAM_B.short} wins`:x.w==="H"?"Halved":"—"}</span>
               <span className="hr2">{m.text}</span></div>;
           })}
         </div>))}
       {f.scope==="combined" && (()=>{
         const x = ev.results[0].holes[hole];
         return <div className="holeres">
-          <span>Hole {hole+1} — {TEAM_A.name} {x.a ?? "·"} · {TEAM_B.name} {x.b ?? "·"}</span>
+          <span>Hole {hole+1} — {TEAM_A.short} {x.a ?? "·"} · {TEAM_B.short} {x.b ?? "·"}</span>
           <span className="hr2">{ev.results[0].text}</span></div>;
       })()}
       <div className="dots18">
@@ -692,7 +706,12 @@ body{background:var(--paper);}
  background:var(--ink);color:var(--paper);}
 .wordmark{font-family:'Saira Condensed';font-weight:700;font-size:29px;letter-spacing:6px;line-height:1;}
 .tag{font-size:10px;letter-spacing:2.2px;text-transform:uppercase;color:#8FA6C4;margin-top:3px;}
-.tally{font-family:'Saira Condensed';font-size:29px;font-weight:700;font-variant-numeric:tabular-nums;}
+.tally{font-family:'Saira Condensed';font-size:29px;font-weight:700;font-variant-numeric:tabular-nums;
+ display:flex;align-items:center;gap:7px;}
+.tick{height:26px;width:26px;object-fit:contain;border-radius:5px;background:rgba(255,255,255,.07);padding:1px;}
+.sm-crest{height:17px;width:17px;vertical-align:-3px;margin-right:5px;background:none;padding:0;}
+.crest{height:46px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
+.crest img{max-height:46px;max-width:100%;object-fit:contain;}
 .tally .tA{color:var(--blueL);}.tally .tB{color:#E08A62;}.tally .dash{color:#4A5F7D;margin:0 6px;}
 
 .roundbar{background:#fff;border-bottom:1px solid var(--rule);padding:9px 14px;}
