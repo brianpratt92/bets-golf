@@ -4,28 +4,22 @@ import lifemaxxingLogo from "./assets/lifemaxxing.png";
 
 /* ─── COURSES ────────────────────────────────────────────────── */
 const COURSES = {
-  sandhollow: { name:"Sand Hollow Resort", sub:"Championship · Hurricane, UT",
+  sandhollow: { code:"SH", name:"Sand Hollow Resort", short:"Sand Hollow", sub:"Championship · Hurricane, UT",
     par:[4,5,3,4,4,4,5,3,4,5,3,4,4,4,3,4,5,4],
-    hcp:[15,7,17,5,13,1,3,11,9,10,16,2,14,4,8,18,12,6],
-    tees:[{name:"Championship",yds:6893},{name:"Signature",yds:6462},{name:"Fought Combo",yds:5934}] },
-  copperrock: { name:"Copper Rock", sub:"Hurricane, UT",
+    hcp:[15,7,17,5,13,1,3,11,9,10,16,2,14,4,8,18,12,6] },
+  copperrock: { code:"CR", name:"Copper Rock", short:"Copper Rock", sub:"Hurricane, UT",
     par:[5,4,4,3,5,4,3,4,4,4,4,5,4,4,3,5,3,4],
-    hcp:[14,2,16,12,8,18,4,6,10,7,9,13,1,3,17,11,15,5],
-    tees:[{name:"Black",yds:6685},{name:"Gold",yds:6185},{name:"Silver",yds:5753}] },
-  blackdesert: { name:"Black Desert", sub:"Ivins, UT",
+    hcp:[14,2,16,12,8,18,4,6,10,7,9,13,1,3,17,11,15,5] },
+  blackdesert: { code:"BD", name:"Black Desert", short:"Black Desert", sub:"Ivins, UT",
     par:[4,4,3,4,4,4,5,3,5,4,4,4,5,4,3,4,3,5],
-    hcp:[9,11,15,1,13,5,3,17,7,14,2,6,10,16,12,4,18,8],
-    tees:[{name:"Black Desert",yds:6917},{name:"Weiskopf",yds:6474},{name:"Snow Canyon",yds:5634}] },
-  ledges: { name:"The Ledges", sub:"St. George, UT",
+    hcp:[9,11,15,1,13,5,3,17,7,14,2,6,10,16,12,4,18,8] },
+  ledges: { code:"LG", name:"The Ledges", short:"The Ledges", sub:"St. George, UT",
     par:[4,3,5,4,3,4,5,4,4,3,5,3,4,4,4,5,4,4],
-    hcp:[15,7,3,9,17,11,1,13,5,8,4,18,16,14,12,2,6,10],
-    tees:[{name:"Black",yds:7145},{name:"Blue",yds:6713},{name:"White",yds:6230}] },
-  coralcanyon: { name:"Coral Canyon", sub:"Washington, UT",
+    hcp:[15,7,3,9,17,11,1,13,5,8,4,18,16,14,12,2,6,10] },
+  coralcanyon: { code:"CC", name:"Coral Canyon", short:"Coral Canyon", sub:"Washington, UT",
     par:[4,3,4,3,5,4,5,3,5,4,5,3,4,4,3,5,4,4],
-    hcp:[9,15,5,7,13,1,17,11,3,6,10,12,8,2,16,18,14,4],
-    tees:[{name:"Black",yds:7146},{name:"Blue",yds:6580},{name:"Blue/White",yds:6151}] },
+    hcp:[9,15,5,7,13,1,17,11,3,6,10,12,8,2,16,18,14,4] },
 };
-const COURSE_KEYS = Object.keys(COURSES);
 
 /* ─── TEAMS ──────────────────────────────────────────────────── */
 const TEAM_A = { name:"UnderDawgz",  short:"Dawgz",    logo:underdawgzLogo,
@@ -35,43 +29,48 @@ const TEAM_B = { name:"Lifemaxxing", short:"Lifemaxx", logo:lifemaxxingLogo,
 const ALL = [...TEAM_A.players, ...TEAM_B.players];
 const teamOf = p => TEAM_A.players.includes(p) ? "A" : "B";
 
-/* ─── FORMATS ────────────────────────────────────────────────── */
+/* ─── FORMATS (locked) ───────────────────────────────────────── */
+/* pick  : how a side's counting value is built from its players' net scores
+   mode  : "holes" = hole winners drive segments · "points" = totals drive segments
+   scope : "group" one match per foursome · "group2" two 1v1s per foursome · "all" one 8-player match */
 const FORMATS = {
-  bb_match:     { label:"Best Ball Match Play",    scope:"group",    pts:2,
-                  note:"Each foursome is one 2v2 match. Low net ball wins the hole." },
-  best2_stroke: { label:"Best 2 Ball Stroke Play", scope:"combined", pts:2,
-                  note:"All eight. The two lowest net scores per hole count toward the team total." },
-  stableford:   { label:"Aggregate Stableford",    scope:"combined", pts:2, sf:true,
-                  note:"All eight. Every net Stableford score counts. Most points wins." },
-  bb_stroke:    { label:"Best Ball Stroke Play",   scope:"combined", pts:2, best1:true,
-                  note:"All eight. Lowest net ball per hole is the team score." },
-  singles:      { label:"Singles Match Play",      scope:"group2",   pts:4,
-                  note:"Two 1v1 matches inside each foursome. One point each." },
+  bb2:     { label:"2v2 Best Ball Match Play", scope:"group",  mode:"holes",  pick:"best1", segPts:1,
+             note:"One 2v2 match per foursome. Lowest net ball on each side wins the hole. Front, back and overall worth 1 point each." },
+  agg3:    { label:"4v4 Aggregate Match Play", scope:"all",    mode:"holes",  pick:"best3", segPts:2,
+             note:"All eight in one match. Three best net scores per side count each hole; lower total wins the hole. Front, back and overall worth 2 points each." },
+  sf2:     { label:"2v2 Aggregate Stableford", scope:"group",  mode:"points", pick:"sfsum", segPts:1,
+             note:"One 2v2 match per foursome. Both net Stableford scores count and accumulate. Front, back and overall worth 1 point each." },
+  singles: { label:"Singles Match Play",       scope:"group2", mode:"holes",  pick:"best1", segPts:1,
+             note:"Two 1v1 matches per foursome. Front, back and overall worth 1 point each, so 3 per match." },
 };
 
-/* ─── PER-ROUND DEFAULTS ─────────────────────────────────────── */
-const SEED = [
-  { n:1, day:"Thu 9/10", time:"7:22 AM", course:"sandhollow",  tee:"Signature", format:"bb_match" },
-  { n:2, day:"Thu 9/10", time:"2:12 PM", course:"copperrock",  tee:"Gold",      format:"best2_stroke" },
-  { n:3, day:"Fri 9/11", time:"3:48 PM", course:"blackdesert", tee:"Weiskopf",  format:"stableford" },
-  { n:4, day:"Sat 9/12", time:"7:40 AM", course:"ledges",      tee:"Blue",      format:"bb_stroke" },
+const ROUNDS = [
+  { n:1, day:"Thu 9/10", time:"7:22 AM", course:"sandhollow",  tee:"Signature", format:"bb2" },
+  { n:2, day:"Thu 9/10", time:"2:12 PM", course:"copperrock",  tee:"Gold",      format:"agg3" },
+  { n:3, day:"Fri 9/11", time:"3:48 PM", course:"blackdesert", tee:"Weiskopf",  format:"sf2" },
+  { n:4, day:"Sat 9/12", time:"7:40 AM", course:"ledges",      tee:"Blue",      format:"bb2" },
   { n:5, day:"Sat 9/12", time:"2:40 PM", course:"coralcanyon", tee:"Blue",      format:"singles" },
 ];
-const BASE_GROUPS = [["Mark","Brian","Adam","Casey"],["Paul","James","Michael","Timothy"]];
-const BASE_HCP = { Mark:14, Brian:4, Paul:12, James:9, Adam:11, Casey:18, Michael:7, Timothy:16 };
+const roundPts = r => {
+  const f = FORMATS[r.format];
+  const matches = f.scope==="all" ? 1 : f.scope==="group2" ? 4 : 2;
+  return matches * f.segPts * 3;
+};
+const TOTAL_PTS = ROUNDS.reduce((t,r)=>t+roundPts(r), 0);
 
+const BASE_GROUPS = [["Mark","Brian","Adam","Casey"],["Paul","James","Michael","Timothy"]];
 const emptyScores = () => Object.fromEntries(ALL.map(p => [p, Array(18).fill(null)]));
 const clone = x => JSON.parse(JSON.stringify(x));
 const pairsFromGroups = groups => groups.map(g => {
   const a = g.filter(p=>teamOf(p)==="A"), b = g.filter(p=>teamOf(p)==="B");
-  return a.map((p,i) => [p, b[i] ?? b[0] ?? p]).filter(x => x[1] !== x[0]);
+  return a.map((p,i) => b[i] ? [p, b[i]] : null).filter(Boolean);
 });
 
-function makeRound(seed) {
-  const groups = clone(BASE_GROUPS);
-  return { ...seed, groups, pairs: pairsFromGroups(groups),
-           hcp: { ...BASE_HCP }, scores: emptyScores() };
-}
+/* ─── HANDICAPS ──────────────────────────────────────────────── */
+const ALLOWANCE = 0.9;
+const playing = raw => raw==="" || raw==null ? 0 : Math.round(Number(raw) * ALLOWANCE);
+const emptyHcp = () => Object.fromEntries(
+  Object.keys(COURSES).map(k => [k, Object.fromEntries(ALL.map(p=>[p,""]))]));
 
 /* ─── SCORING ────────────────────────────────────────────────── */
 function strokesOnHole(chc, rank) {
@@ -80,143 +79,126 @@ function strokesOnHole(chc, rank) {
   const a = -c;
   return -(Math.floor(a/18) + (rank > 18-(a%18) ? 1 : 0));
 }
-const netOn = (g, chc, rank) => g==null ? null : g - strokesOnHole(chc, rank);
+const netOf = (gross, chc, rank) => gross==null ? null : gross - strokesOnHole(chc, rank);
 const sfPts = (net, par) => net==null ? null
-  : (net-par<=-3?5 : net-par===-2?4 : net-par===-1?3 : net-par===0?2 : net-par===1?1 : 0);
+  : (net-par<=-3 ? 5 : net-par===-2 ? 4 : net-par===-1 ? 3 : net-par===0 ? 2 : net-par===1 ? 1 : 0);
 
-function matchLabel(run, played) {
-  for (let i=0;i<played;i++){
-    const rem = 17-i;
-    if (Math.abs(run[i]) > rem)
-      return { winner: run[i]>0?"A":"B", text:`${Math.abs(run[i])}&${rem}`, done:true };
+function sideValue(pick, players, h, ctx) {
+  const { scores, chc, course } = ctx;
+  if (pick === "sfsum") {
+    const pts = players.map(p => sfPts(netOf(scores[p][h], chc[p], course.hcp[h]), course.par[h]))
+                       .filter(v=>v!=null);
+    return pts.length === players.length ? pts.reduce((a,b)=>a+b,0) : null;
   }
-  const cur = played ? run[played-1] : 0;
-  if (!played) return { winner:null, text:"Not started", done:false };
-  if (played >= 18)
-    return cur===0 ? {winner:null,text:"Halved",done:true}
-                   : {winner:cur>0?"A":"B", text:`${Math.abs(cur)} up`, done:true};
-  return cur===0 ? {winner:null, text:`AS thru ${played}`, done:false}
-                 : {winner:cur>0?"A":"B", text:`${Math.abs(cur)} up thru ${played}`, done:false};
+  const nets = players.map(p => netOf(scores[p][h], chc[p], course.hcp[h])).filter(v=>v!=null);
+  if (!nets.length) return null;
+  const s = [...nets].sort((x,y)=>x-y);
+  if (pick === "best1") return s[0];
+  if (pick === "best3") return nets.length < 3 ? null : s.slice(0,3).reduce((a,b)=>a+b,0);
+  return s[0];
 }
 
-function buildMatches(R) {
-  const f = FORMATS[R.format];
+function segment(holes, from, to, mode, segPts) {
+  let a=0, b=0, played=0;
+  for (let i=from; i<to; i++) {
+    const h = holes[i];
+    if (h.a==null || h.b==null) continue;
+    played++;
+    if (mode === "holes") { if (h.w==="A") a++; else if (h.w==="B") b++; }
+    else { a += h.a; b += h.b; }
+  }
+  const winner = !played ? null : a===b ? "tie" : a>b ? "A" : "B";
+  const aPts = !played ? 0 : winner==="A" ? segPts : winner==="tie" ? segPts/2 : 0;
+  const bPts = !played ? 0 : winner==="B" ? segPts : winner==="tie" ? segPts/2 : 0;
+  return { a, b, played, total: to-from, winner, aPts, bPts, done: played === to-from };
+}
+
+function evalMatch(m, f, ctx) {
+  const holes = Array.from({length:18}, (_,h) => {
+    const a = sideValue(f.pick, m.a, h, ctx);
+    const b = sideValue(f.pick, m.b, h, ctx);
+    let w = null;
+    if (a!=null && b!=null)
+      w = a===b ? "H" : (f.mode==="points" ? (a>b?"A":"B") : (a<b?"A":"B"));
+    return { a, b, w };
+  });
+  const front   = segment(holes, 0, 9,  f.mode, f.segPts);
+  const back    = segment(holes, 9, 18, f.mode, f.segPts);
+  const overall = segment(holes, 0, 18, f.mode, f.segPts);
+  const played  = holes.reduce((t,x,i)=> (x.a!=null&&x.b!=null) ? i+1 : t, 0);
+  return { ...m, holes, front, back, overall, played,
+           aPts: front.aPts+back.aPts+overall.aPts,
+           bPts: front.bPts+back.bPts+overall.bPts };
+}
+
+function buildMatches(round, groups, pairs) {
+  const f = FORMATS[round.format];
   if (f.scope === "group")
-    return R.groups.map((g,i)=>({ key:`g${i}`, group:i, kind:"match",
+    return groups.map((g,i)=>({ key:`g${i}`, group:i,
       a:g.filter(p=>teamOf(p)==="A"), b:g.filter(p=>teamOf(p)==="B") }));
   if (f.scope === "group2")
-    return R.groups.flatMap((g,i)=>(R.pairs[i]||[]).map((pr,j)=>({
-      key:`g${i}m${j}`, group:i, kind:"match", a:[pr[0]], b:[pr[1]] })));
-  return [{ key:"all", group:null, kind:"total", a:TEAM_A.players, b:TEAM_B.players }];
+    return groups.flatMap((g,i)=>(pairs[i]||[]).map((pr,j)=>({
+      key:`g${i}m${j}`, group:i, a:[pr[0]], b:[pr[1]] })));
+  return [{ key:"all", group:null, a:TEAM_A.players, b:TEAM_B.players }];
 }
 
-function evalRound(R) {
-  const c = COURSES[R.course], f = FORMATS[R.format];
-  const hc = R.hcp, sc = R.scores;
-  const results = buildMatches(R).map(m => {
-    if (m.kind === "match") {
-      const roster = [...m.a, ...m.b].filter(p => sc[p]);
-      if (!roster.length) return { ...m, holes:Array(18).fill({a:null,b:null,w:null}),
-                                   run:Array(18).fill(0), played:0, winner:null, text:"—", done:false };
-      const low = Math.min(...roster.map(p=>Number(hc[p])||0));
-      const ball = side => Array.from({length:18},(_,h)=>{
-        const v = side.map(p=>netOn(sc[p][h], (Number(hc[p])||0)-low, c.hcp[h])).filter(x=>x!=null);
-        return v.length ? Math.min(...v) : null;
-      });
-      const aB = ball(m.a), bB = ball(m.b);
-      let r=0; const run=[], holes=[];
-      for (let h=0;h<18;h++){
-        const av=aB[h], bv=bB[h]; let w=null;
-        if (av!=null && bv!=null){ if(av<bv){r++;w="A";} else if(bv<av){r--;w="B";} else w="H"; }
-        run.push(r); holes.push({a:av,b:bv,w});
-      }
-      const played = holes.reduce((t,x,i)=>x.w?i+1:t,0);
-      return { ...m, run, holes, played, ...matchLabel(run,played) };
-    }
-    const holes=[]; let aT=0,bT=0;
-    for (let h=0;h<18;h++){
-      const val = side => {
-        const nets = side.map(p=>netOn(sc[p][h], Number(hc[p])||0, c.hcp[h])).filter(x=>x!=null);
-        if (!nets.length) return null;
-        if (f.sf) return side.map(p=>sfPts(netOn(sc[p][h],Number(hc[p])||0,c.hcp[h]), c.par[h]))
-                             .filter(x=>x!=null).reduce((a,b)=>a+b,0);
-        const s=[...nets].sort((x,y)=>x-y);
-        return f.best1 ? s[0] : s.slice(0,2).reduce((a,b)=>a+b,0);
-      };
-      const av=val(m.a), bv=val(m.b);
-      if(av!=null)aT+=av; if(bv!=null)bT+=bv;
-      let w=null;
-      if(av!=null&&bv!=null) w = av===bv?"H" : (f.sf ? (av>bv?"A":"B") : (av<bv?"A":"B"));
-      holes.push({a:av,b:bv,w});
-    }
-    const played = holes.reduce((t,x,i)=>x.w?i+1:t,0);
-    const tie = aT===bT, aAhead = f.sf ? aT>bT : aT<bT;
-    return { ...m, holes, played, aT, bT, sf:!!f.sf, winner: tie?null:(aAhead?"A":"B"),
-             text: played?`${aT} – ${bT}`:"Not started", done: played>=18 };
-  });
-
-  const per = f.scope==="combined" ? f.pts : 1;
-  let aPts=0,bPts=0;
-  results.forEach(r=>{
-    if(!r.played) return;
-    if(r.winner==="A") aPts+=per; else if(r.winner==="B") bPts+=per;
-    else if(r.done){ aPts+=per/2; bPts+=per/2; }
-  });
-  const played = Math.max(0, ...results.map(r=>r.played));
-  return { results, aPts, bPts, played, complete: results.every(r=>r.done), fmt:f };
+function evalRound(round, st, hcpTable) {
+  const course = COURSES[round.course];
+  const f = FORMATS[round.format];
+  const chc = Object.fromEntries(ALL.map(p => [p, playing(hcpTable[round.course][p])]));
+  const ctx = { scores: st.scores, chc, course };
+  const results = buildMatches(round, st.groups, st.pairs).map(m => evalMatch(m, f, ctx));
+  return {
+    results, chc, f, course,
+    aPts: results.reduce((t,r)=>t+r.aPts, 0),
+    bPts: results.reduce((t,r)=>t+r.bPts, 0),
+    played: Math.max(0, ...results.map(r=>r.played)),
+  };
 }
 
 /* ─── APP ────────────────────────────────────────────────────── */
 export default function App() {
   const [tab,setTab] = useState("live");
   const [roundN,setRoundN] = useState(1);
-  const [rounds,setRounds] = useState(() =>
-    Object.fromEntries(SEED.map(s => [s.n, makeRound(s)])));
+  const [hcpTable,setHcpTable] = useState(emptyHcp);
+  const [state,setState] = useState(() => Object.fromEntries(ROUNDS.map(r => {
+    const groups = clone(BASE_GROUPS);
+    return [r.n, { groups, pairs: pairsFromGroups(groups), scores: emptyScores() }];
+  })));
   const [archive,setArchive] = useState([]);
 
-  const R = rounds[roundN];
-  const course = COURSES[R.course];
-  const ev = useMemo(()=>evalRound(R), [R]);
-  const list = SEED.map(s => rounds[s.n]);
-  const allEv = useMemo(()=>list.map(evalRound), [rounds]);
-  const totals = allEv.reduce((t,r)=>({a:t.a+r.aPts,b:t.b+r.bPts}),{a:0,b:0});
+  const round = ROUNDS.find(r=>r.n===roundN);
+  const st = state[roundN];
+  const ev = useMemo(()=>evalRound(round, st, hcpTable), [round, st, hcpTable]);
+  const allEv = useMemo(()=>ROUNDS.map(r=>evalRound(r, state[r.n], hcpTable)), [state, hcpTable]);
+  const totals = allEv.reduce((t,r)=>({a:t.a+r.aPts, b:t.b+r.bPts}), {a:0,b:0});
 
-  // every write is scoped to one round id and never touches the others
-  const patch = obj => setRounds(rs => ({ ...rs, [roundN]: { ...rs[roundN], ...obj } }));
-  const hasScores = ALL.some(p => R.scores[p].some(v => v != null));
-
-  const setScore = (p,h,v) => setRounds(rs => {
-    const cur = rs[roundN];
+  const patch = obj => setState(s => ({ ...s, [roundN]: { ...s[roundN], ...obj } }));
+  const setScore = (p,h,v) => setState(s => {
+    const cur = s[roundN];
     const scores = { ...cur.scores, [p]: [...cur.scores[p]] };
     scores[p][h] = v;
-    return { ...rs, [roundN]: { ...cur, scores } };
+    return { ...s, [roundN]: { ...cur, scores } };
   });
-
-  const changeCourse = key => {
-    if (hasScores && !window.confirm(
-      `Switching to ${COURSES[key].name} clears the scores already entered for Round ${roundN}. Continue?`)) return;
-    patch({ course:key, tee:COURSES[key].tees[1].name, scores:emptyScores() });
-  };
-  const changeFormat = key => {
-    const groups = rounds[roundN].groups;
-    patch({ format:key, pairs: pairsFromGroups(groups) });
-  };
+  const hasScores = ALL.some(p => st.scores[p].some(v => v != null));
   const clearScores = () => {
     if (!window.confirm(`Clear all scores for Round ${roundN}?`)) return;
     patch({ scores: emptyScores() });
   };
   const moveToGroup = (player, to) => {
-    const groups = R.groups.map(g => g.filter(p => p !== player));
+    const groups = st.groups.map(g => g.filter(p => p !== player));
     groups[to] = [...groups[to], player];
     patch({ groups, pairs: pairsFromGroups(groups) });
   };
 
   const saveToArchive = () => {
     setArchive(a => [{ id:Date.now(), roundN, date:new Date().toLocaleString(),
-      course:R.course, tee:R.tee, format:R.format,
-      groups:clone(R.groups), hcp:{...R.hcp}, scores:clone(R.scores),
-      aPts:ev.aPts, bPts:ev.bPts,
-      results:ev.results.map(r=>({a:r.a,b:r.b,text:r.text})) },
+      course:round.course, tee:round.tee, format:round.format,
+      groups:clone(st.groups), chc:{...ev.chc},
+      raw:Object.fromEntries(ALL.map(p=>[p, hcpTable[round.course][p]])),
+      scores:clone(st.scores), aPts:ev.aPts, bPts:ev.bPts,
+      results:ev.results.map(r=>({ a:r.a, b:r.b, aPts:r.aPts, bPts:r.bPts,
+        front:[r.front.a,r.front.b], back:[r.back.a,r.back.b], overall:[r.overall.a,r.overall.b] })) },
       ...a.filter(x=>x.roundN!==roundN)]);
     setTab("archive");
   };
@@ -228,35 +210,37 @@ export default function App() {
         <div><div className="wordmark">BETS</div><div className="tag">St. George · Sept 10–13</div></div>
         <div className="tally">
           <img className="tick" src={TEAM_A.logo} alt={TEAM_A.name}/>
-          <span className="tA">{fmt(totals.a)}</span>
-          <span className="dash">–</span><span className="tB">{fmt(totals.b)}</span>
+          <span className="tA">{fmt(totals.a)}</span><span className="dash">–</span>
+          <span className="tB">{fmt(totals.b)}</span>
           <img className="tick" src={TEAM_B.logo} alt={TEAM_B.name}/>
         </div>
       </header>
       <div className="roundbar">
         <select value={roundN} onChange={e=>setRoundN(+e.target.value)}>
-          {list.map(r=><option key={r.n} value={r.n}>
-            R{r.n} · {COURSES[r.course].name} · {FORMATS[r.format].label}</option>)}
+          {ROUNDS.map(r=><option key={r.n} value={r.n}>
+            R{r.n} · {COURSES[r.course].short} · {FORMATS[r.format].label}</option>)}
         </select>
-        <div className="rmeta">{R.day} · {R.time} · {R.tee} tees</div>
+        <div className="rmeta">{round.day} · {round.time} · {round.tee} tees · {roundPts(round)} pts</div>
       </div>
       <nav className="tabs">
-        {[["live","Live"],["round","Round"],["archive","Archive"],["stats","Stats"],["std","Standings"]]
+        {[["live","Live"],["round","Round"],["hcp","Hcps"],["archive","Archive"],
+          ["stats","Stats"],["std","Points"]]
           .map(([id,l])=><button key={id} className={tab===id?"on":""} onClick={()=>setTab(id)}>{l}</button>)}
       </nav>
-      {tab==="live"    && <Live R={R} course={course} ev={ev} totals={totals} list={list} allEv={allEv}/>}
-      {tab==="round"   && <Round key={roundN} R={R} course={course} ev={ev} patch={patch}
-                            setScore={setScore} changeCourse={changeCourse} changeFormat={changeFormat}
+      {tab==="live"    && <Live round={round} ev={ev} totals={totals} allEv={allEv}/>}
+      {tab==="round"   && <Round key={roundN} round={round} st={st} ev={ev} setScore={setScore}
                             clearScores={clearScores} moveToGroup={moveToGroup} hasScores={hasScores}
-                            onArchive={saveToArchive} archived={archive.some(a=>a.roundN===roundN)}/>}
+                            patch={patch} onArchive={saveToArchive}
+                            archived={archive.some(a=>a.roundN===roundN)}/>}
+      {tab==="hcp"     && <Handicaps hcpTable={hcpTable} setHcpTable={setHcpTable}/>}
       {tab==="archive" && <Archive archive={archive} onDelete={id=>setArchive(a=>a.filter(x=>x.id!==id))}/>}
       {tab==="stats"   && <Stats archive={archive}/>}
-      {tab==="std"     && <Standings list={list} allEv={allEv} totals={totals}/>}
+      {tab==="std"     && <Standings allEv={allEv} totals={totals}/>}
     </div>
   </>);
 }
 const fmt = n => Number.isInteger(n) ? n : n.toFixed(1);
-const sum = a => a.reduce((t,v)=>t+(v??0),0);
+const sum = a => a.reduce((t,v)=>t+(v??0), 0);
 const cls = (v,par) => v==null ? "" :
   (v-par<=-2?"eagle" : v-par===-1?"birdie" : v-par===0?"parr" : v-par===1?"bogey":"dbl");
 
@@ -274,76 +258,147 @@ const Big = ({a,b,mid,sub}) => (
     </div>
   </div>
 );
-const Tracker = ({ev}) => (
+
+/* three-segment strip for one match */
+function Segments({ m, mode, compact }) {
+  const rows = [["Front 9", m.front], ["Back 9", m.back], ["Overall", m.overall]];
+  const unit = mode==="points" ? "pts" : "holes";
+  return (
+    <div className={"segs"+(compact?" compact":"")}>
+      {rows.map(([label, s]) => (
+        <div className="seg" key={label}>
+          <div className="seg-l">{label}</div>
+          <div className="seg-v">
+            <b className={s.winner==="A"?"lead":""}>{s.a}</b>
+            <span>–</span>
+            <b className={s.winner==="B"?"lead":""}>{s.b}</b>
+          </div>
+          <div className="seg-u">{s.played ? `${unit} · ${s.played}/${s.total}` : "—"}</div>
+          <div className={"seg-p"+(s.aPts>s.bPts?" pA":s.bPts>s.aPts?" pB":"")}>
+            {s.played ? `${fmt(s.aPts)} – ${fmt(s.bPts)}` : "0 – 0"}
+          </div>
+        </div>))}
+    </div>
+  );
+}
+
+const Tracker = ({ ev }) => (
   <div className="tracker">
     <div className="trk-h"><span>Live tracker</span>
       <span className="trk-pts">{fmt(ev.aPts)} – {fmt(ev.bPts)} this round</span></div>
-    {ev.results.map(m=>(
-      <div className="trk-r" key={m.key}>
-        <div className={"trk-t"+(m.winner==="A"?" lead":"")}>{m.a.join(" & ")}</div>
-        <div className={"trk-s"+(m.winner==="A"?" aL":m.winner==="B"?" bL":"")}>{m.text}</div>
-        <div className={"trk-t right"+(m.winner==="B"?" lead":"")}>{m.b.join(" & ")}</div>
+    {ev.results.map(m => (
+      <div className="trk-m" key={m.key}>
+        <div className="trk-r">
+          <div className={"trk-t"+(m.aPts>m.bPts?" lead":"")}>{m.a.join(" & ")}</div>
+          <div className="trk-s">{m.played ? `thru ${m.played}` : "—"}</div>
+          <div className={"trk-t right"+(m.bPts>m.aPts?" lead":"")}>{m.b.join(" & ")}</div>
+        </div>
+        <Segments m={m} mode={ev.f.mode} compact/>
       </div>))}
   </div>
 );
 
 /* ─── LIVE ───────────────────────────────────────────────────── */
-function Live({R,course,ev,totals,list,allEv}) {
+function Live({ round, ev, totals, allEv }) {
+  const course = COURSES[round.course];
   return (
     <div className="pad">
-      <Big a={totals.a} b={totals.b} mid="Cup" sub="12 points"/>
+      <Big a={totals.a} b={totals.b} mid="Cup" sub={`${TOTAL_PTS} points`}/>
       <div className="courseband">
         <div><div className="cname">{course.name}</div><div className="csub">{course.sub}</div></div>
-        <div className="fmtpill">{FORMATS[R.format].label}</div>
+        <div className="fmtpill">{ev.f.label}</div>
       </div>
-      <p className="blurb">{FORMATS[R.format].note}</p>
+      <p className="blurb">{ev.f.note}</p>
       <Tracker ev={ev}/>
       <div className="minitable">
         <div className="mt-h">All rounds</div>
-        {list.map((r,i)=>(
+        {ROUNDS.map((r,i)=>(
           <div className="mt-r" key={r.n}>
             <span className="mt-n">R{r.n}</span>
-            <span className="mt-c">{COURSES[r.course].name}</span>
+            <span className="mt-c">{COURSES[r.course].short}</span>
             <span className="mt-s">{allEv[i].played ? `thru ${allEv[i].played}` : "—"}</span>
             <span className="mt-p">{fmt(allEv[i].aPts)} – {fmt(allEv[i].bPts)}</span>
+            <span className="mt-w">/{roundPts(r)}</span>
           </div>))}
       </div>
     </div>
   );
 }
 
+/* ─── HANDICAPS ──────────────────────────────────────────────── */
+function Handicaps({ hcpTable, setHcpTable }) {
+  const keys = Object.keys(COURSES);
+  const set = (ck, p, v) => setHcpTable(t => ({ ...t, [ck]: { ...t[ck], [p]: v==="" ? "" : +v } }));
+  return (
+    <div className="pad">
+      <div className="hnote">
+        <b>Course handicaps</b>
+        <p>Enter each player's full course handicap for all five courses. The app plays everything
+           off {Math.round(ALLOWANCE*100)}% of that number, rounded to the nearest stroke, and every
+           scorecard pulls its allowance from this table.</p>
+      </div>
+      <div className="scroll card-wrap">
+        <table className="hcptable">
+          <thead>
+            <tr>
+              <th className="stick" rowSpan={2}>Player</th>
+              <th colSpan={keys.length} className="grp-raw">Full course handicap</th>
+              <th colSpan={keys.length} className="grp-play">Playing ({Math.round(ALLOWANCE*100)}%)</th>
+            </tr>
+            <tr>
+              {keys.map(k=><th key={"r"+k} className="grp-raw">{COURSES[k].code}</th>)}
+              {keys.map(k=><th key={"p"+k} className="grp-play">{COURSES[k].code}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {ALL.map(p=>(
+              <tr key={p} className={"t"+teamOf(p)}>
+                <th className="stick">{p}</th>
+                {keys.map(k=>(
+                  <td key={"r"+k} className="cell">
+                    <input inputMode="numeric" value={hcpTable[k][p]} placeholder="–"
+                      onChange={e=>set(k, p, e.target.value.replace(/[^\d.-]/g,""))}/>
+                  </td>))}
+                {keys.map(k=>(
+                  <td key={"p"+k} className="playcell">
+                    {hcpTable[k][p]==="" ? "–" : playing(hcpTable[k][p])}
+                  </td>))}
+              </tr>))}
+          </tbody>
+        </table>
+      </div>
+      <div className="legend">
+        {keys.map(k=><span key={k}><b>{COURSES[k].code}</b> {COURSES[k].short}</span>)}
+      </div>
+      <p className="note">Blank counts as scratch until a number is entered. Rounding is to the
+        nearest whole stroke, so 15 becomes 14 and 17 becomes 15.</p>
+    </div>
+  );
+}
+
 /* ─── ROUND ──────────────────────────────────────────────────── */
-function Round({R,course,ev,patch,setScore,changeCourse,changeFormat,clearScores,
-                moveToGroup,hasScores,onArchive,archived}) {
+function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, patch, onArchive, archived }) {
   const [open,setOpen] = useState(!hasScores);
   const [mode,setMode] = useState("card");
   const [hole,setHole] = useState(0);
-  const f = FORMATS[R.format];
+  const f = ev.f, course = ev.course;
+  const missing = ALL.filter(p => ev.chc[p] === 0);
 
   return (
     <div className="pad">
       <Tracker ev={ev}/>
+
       <button className="disc" onClick={()=>setOpen(o=>!o)}>
-        {open?"▾":"▸"} Setup — Round {R.n}: course, groups, handicaps, matchups
+        {open?"▾":"▸"} Groups — Round {round.n}, {COURSES[round.course].short}
       </button>
       {open && (
         <div className="setup">
-          <div className="sethead">Course & format</div>
-          <div className="row2">
-            <select value={R.course} onChange={e=>changeCourse(e.target.value)}>
-              {COURSE_KEYS.map(k=><option key={k} value={k}>{COURSES[k].name}</option>)}
-            </select>
-            <select value={R.tee} onChange={e=>patch({tee:e.target.value})}>
-              {course.tees.map(t=><option key={t.name}>{t.name}</option>)}
-            </select>
+          <div className="lockrow">
+            <span className="lockpill">Locked</span>
+            <span>{COURSES[round.course].name} · {round.tee} tees · {f.label} · {roundPts(round)} points</span>
           </div>
-          <select className="full" value={R.format} onChange={e=>changeFormat(e.target.value)}>
-            {Object.entries(FORMATS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
-          </select>
-          <div className="hint">These settings belong to Round {R.n} only. Changing the course clears this round's scores.</div>
-
           <div className="sethead">Groups</div>
-          {R.groups.map((g,gi)=>(
+          {st.groups.map((g,gi)=>(
             <div className="grpbox" key={gi}>
               <div className="grpname">Group {gi+1}</div>
               <div className="chips">
@@ -354,40 +409,33 @@ function Round({R,course,ev,patch,setScore,changeCourse,changeFormat,clearScores
             </div>))}
           <div className="hint">Tap a name to move it to the other group.</div>
 
-          <div className="sethead">Course handicaps</div>
-          <div className="hgrid">
-            {ALL.map(p=>(
-              <label key={p} className={"hcell t"+teamOf(p)}>
-                <span>{p}</span>
-                <input type="number" inputMode="numeric" value={R.hcp[p]}
-                  onChange={e=>patch({hcp:{...R.hcp,[p]:e.target.value===""?"":+e.target.value}})}/>
-              </label>))}
-          </div>
-
           {f.scope==="group2" && (<>
             <div className="sethead">Singles matchups</div>
-            {R.groups.map((g,gi)=>(
+            {st.groups.map((g,gi)=>(
               <div className="grpbox" key={gi}>
                 <div className="grpname">Group {gi+1}</div>
-                {(R.pairs[gi]||[]).map((pr,j)=>(
+                {(st.pairs[gi]||[]).map((pr,j)=>(
                   <div className="pairrow" key={j}>
                     <select className="pA" value={pr[0]} onChange={e=>{
-                      const pairs=clone(R.pairs); pairs[gi][j][0]=e.target.value; patch({pairs});}}>
+                      const pairs=clone(st.pairs); pairs[gi][j][0]=e.target.value; patch({pairs});}}>
                       {g.filter(p=>teamOf(p)==="A").map(p=><option key={p}>{p}</option>)}
                     </select>
                     <span className="vs">v</span>
                     <select className="pB" value={pr[1]} onChange={e=>{
-                      const pairs=clone(R.pairs); pairs[gi][j][1]=e.target.value; patch({pairs});}}>
+                      const pairs=clone(st.pairs); pairs[gi][j][1]=e.target.value; patch({pairs});}}>
                       {g.filter(p=>teamOf(p)==="B").map(p=><option key={p}>{p}</option>)}
                     </select>
                   </div>))}
-                {!(R.pairs[gi]||[]).length && <span className="hint">Needs two players from each team.</span>}
+                {!(st.pairs[gi]||[]).length && <span className="hint">Needs a player from each team.</span>}
               </div>))}
           </>)}
-
           {hasScores && <button className="clearbtn" onClick={clearScores}>Clear this round's scores</button>}
         </div>
       )}
+
+      {missing.length > 0 &&
+        <div className="warn">No course handicap set for {missing.join(", ")} at {COURSES[round.course].short}.
+          They're playing scratch until you fill the Hcps tab.</div>}
 
       <div className="modebar">
         <button className={mode==="card"?"on":""} onClick={()=>setMode("card")}>Full card</button>
@@ -395,23 +443,25 @@ function Round({R,course,ev,patch,setScore,changeCourse,changeFormat,clearScores
       </div>
 
       {mode==="hole"
-        ? <HoleEntry R={R} course={course} hole={hole} setHole={setHole} setScore={setScore} ev={ev}/>
-        : R.groups.map((g,gi)=>(
-            <GroupCard key={gi} gi={gi} group={g} course={course} R={R} ev={ev} setScore={setScore}/>))}
+        ? <HoleEntry st={st} ev={ev} hole={hole} setHole={setHole} setScore={setScore}/>
+        : st.groups.map((g,gi)=>(
+            <GroupCard key={gi} gi={gi} group={g} st={st} ev={ev} setScore={setScore}/>))}
 
-      {f.scope==="combined" && <CombinedStrip ev={ev} sf={!!f.sf}/>}
+      {f.scope==="all" && <MatchCard m={ev.results[0]} ev={ev} title="4v4 aggregate — best 3 net"/>}
 
       <button className="archivebtn" onClick={onArchive}>
         {archived ? "Update archived round" : "Save round to archive"}
       </button>
-      <p className="note">Saving snapshots both cards, the handicaps and the results. The Stats tab reads only from the archive.</p>
+      <p className="note">Gross scores are what you enter. Net is gross minus the {Math.round(ALLOWANCE*100)}%
+        allowance from the Hcps tab, and net is what settles every match.</p>
     </div>
   );
 }
 
-function GroupCard({gi,group,course,R,ev,setScore}) {
-  const f = FORMATS[R.format];
-  const mine = ev.results.filter(r=>r.group===gi);
+/* one foursome */
+function GroupCard({ gi, group, st, ev, setScore }) {
+  const f = ev.f, course = ev.course;
+  const mine = ev.results.filter(r => r.group === gi);
   const H = Array.from({length:18},(_,i)=>i);
   return (
     <div className="gcard">
@@ -427,77 +477,103 @@ function GroupCard({gi,group,course,R,ev,setScore}) {
           </thead>
           <tbody>
             {group.map(p=>{
-              const g = R.scores[p];
+              const g = st.scores[p];
               return (
                 <tr key={p} className={"t"+teamOf(p)}>
-                  <th className="stick">{p} <em>{R.hcp[p]}</em></th>
-                  {H.map(h=>(
-                    <td key={h} className={"cell "+cls(g[h],course.par[h])}>
-                      <input inputMode="numeric" value={g[h] ?? ""} onChange={e=>{
-                        const v=e.target.value.replace(/\D/g,"");
-                        setScore(p,h,v===""?null:Math.min(19,+v));}}/>
-                      {strokesOnHole(R.hcp[p],course.hcp[h])>0 &&
-                        <i className="dots">{"•".repeat(Math.min(strokesOnHole(R.hcp[p],course.hcp[h]),3))}</i>}
-                    </td>))}
+                  <th className="stick">{p} <em>{ev.chc[p]}</em></th>
+                  {H.map(h=>{
+                    const nt = netOf(g[h], ev.chc[p], course.hcp[h]);
+                    return (
+                      <td key={h} className={"cell "+cls(g[h],course.par[h])}>
+                        <input inputMode="numeric" value={g[h] ?? ""} onChange={e=>{
+                          const v=e.target.value.replace(/\D/g,"");
+                          setScore(p,h,v===""?null:Math.min(19,+v));}}/>
+                        {nt!=null && <i className="netbadge">{nt}</i>}
+                        {strokesOnHole(ev.chc[p],course.hcp[h])>0 &&
+                          <i className="dots">{"•".repeat(Math.min(strokesOnHole(ev.chc[p],course.hcp[h]),3))}</i>}
+                      </td>);
+                  })}
                   <td className="tot">{sum(g.slice(0,9))||"–"}</td>
                   <td className="tot">{sum(g.slice(9))||"–"}</td>
                   <td className="tot">{sum(g)||"–"}</td>
                 </tr>);
             })}
-            {mine.map(m=>(
-              <tr className="resrow" key={m.key}>
-                <th className="stick">{m.a.join("/")} v {m.b.join("/")}</th>
-                {H.map(h=>{
-                  const x=m.holes[h];
-                  return <td key={h} className={"res "+(x.w==="A"?"rA":x.w==="B"?"rB":x.w==="H"?"rH":"")}>
-                    {x.w==="A"?"▲":x.w==="B"?"▼":x.w==="H"?"–":""}</td>;
-                })}
-                <td colSpan={3} className="restot">{m.text}</td>
-              </tr>))}
+            {mine.map(m => <CountRows key={m.key} m={m} ev={ev}/>)}
           </tbody>
         </table>
       </div>
       <div className="legend">
-        {(f.scope==="group"||f.scope==="group2") && (<>
-          <span>▲ {TEAM_A.short} wins hole</span><span>▼ {TEAM_B.short} wins hole</span><span>– halved</span></>)}
+        <span>big = gross</span><span className="lgnet">small = net</span>
         <span>• stroke received</span>
+        {f.mode==="holes" && <><span>▲ {TEAM_A.short}</span><span>▼ {TEAM_B.short}</span></>}
       </div>
+      {mine.map(m => (
+        <div className="matchfoot" key={m.key}>
+          <div className="mf-h">{m.a.join(" & ")} <span>v</span> {m.b.join(" & ")}</div>
+          <Segments m={m} mode={f.mode}/>
+        </div>))}
     </div>
   );
 }
 
-function CombinedStrip({ev,sf}) {
-  const m = ev.results[0];
+/* the two counting rows + hole result row */
+function CountRows({ m, ev }) {
   const H = Array.from({length:18},(_,i)=>i);
-  let ra=0,rb=0;
-  const run = H.map(h=>{ ra+=m.holes[h].a??0; rb+=m.holes[h].b??0; return [ra,rb]; });
+  const label = ev.f.pick==="sfsum" ? "pts" : "net";
+  return (<>
+    <tr className="cntrow tA">
+      <th className="stick">{TEAM_A.short} {label}</th>
+      {H.map(h=><td key={h} className={m.holes[h].w==="A"?"rA":""}>{m.holes[h].a ?? "·"}</td>)}
+      <td className="tot">{segTot(m,0,9,"a")}</td><td className="tot">{segTot(m,9,18,"a")}</td>
+      <td className="tot">{segTot(m,0,18,"a")}</td>
+    </tr>
+    <tr className="cntrow tB">
+      <th className="stick">{TEAM_B.short} {label}</th>
+      {H.map(h=><td key={h} className={m.holes[h].w==="B"?"rB":""}>{m.holes[h].b ?? "·"}</td>)}
+      <td className="tot">{segTot(m,0,9,"b")}</td><td className="tot">{segTot(m,9,18,"b")}</td>
+      <td className="tot">{segTot(m,0,18,"b")}</td>
+    </tr>
+    {ev.f.mode==="holes" && (
+      <tr className="resrow">
+        <th className="stick">Hole</th>
+        {H.map(h=>{
+          const w = m.holes[h].w;
+          return <td key={h} className={"res "+(w==="A"?"rA":w==="B"?"rB":w==="H"?"rH":"")}>
+            {w==="A"?"▲":w==="B"?"▼":w==="H"?"–":""}</td>;
+        })}
+        <td className="tot">{m.front.a}-{m.front.b}</td>
+        <td className="tot">{m.back.a}-{m.back.b}</td>
+        <td className="tot">{m.overall.a}-{m.overall.b}</td>
+      </tr>)}
+  </>);
+}
+const segTot = (m, from, to, side) => {
+  let t=0, any=false;
+  for (let i=from;i<to;i++){ const v=m.holes[i][side]; if(v!=null){t+=v;any=true;} }
+  return any ? t : "–";
+};
+
+/* standalone card for the 4v4 round */
+function MatchCard({ m, ev, title }) {
+  const H = Array.from({length:18},(_,i)=>i);
   return (
     <div className="gcard">
-      <div className="ghead"><span className="gtitle">Team totals</span>
-        <span className="gsub">{sf?"Stableford points":"Net strokes"} · running</span></div>
+      <div className="ghead"><span className="gtitle">Match</span><span className="gsub">{title}</span></div>
       <div className="scroll">
         <table className="card">
-          <thead><tr><th className="stick">Hole</th>{H.map(h=><th key={h}>{h+1}</th>)}<th>Tot</th></tr></thead>
-          <tbody>
-            <tr className="tA"><th className="stick"><img className="tick sm-crest" src={TEAM_A.logo} alt=""/>{TEAM_A.name}</th>
-              {H.map(h=><td key={h} className={m.holes[h].w==="A"?"rA":""}>{m.holes[h].a ?? "·"}</td>)}
-              <td className="tot">{m.aT}</td></tr>
-            <tr className="tB"><th className="stick"><img className="tick sm-crest" src={TEAM_B.logo} alt=""/>{TEAM_B.name}</th>
-              {H.map(h=><td key={h} className={m.holes[h].w==="B"?"rB":""}>{m.holes[h].b ?? "·"}</td>)}
-              <td className="tot">{m.bT}</td></tr>
-            <tr className="resrow"><th className="stick">Running</th>
-              {H.map(h=><td key={h} className="res">{h<m.played?`${run[h][0]}-${run[h][1]}`:""}</td>)}
-              <td className="restot">{m.text}</td></tr>
-          </tbody>
+          <thead><tr><th className="stick">Hole</th>{H.map(h=><th key={h}>{h+1}</th>)}
+            <th>Out</th><th>In</th><th>Tot</th></tr></thead>
+          <tbody><CountRows m={m} ev={ev}/></tbody>
         </table>
       </div>
+      <div className="matchfoot"><Segments m={m} mode={ev.f.mode}/></div>
     </div>
   );
 }
 
-function HoleEntry({R,course,hole,setHole,setScore,ev}) {
-  const par = course.par[hole];
-  const f = FORMATS[R.format];
+/* ─── HOLE ENTRY ─────────────────────────────────────────────── */
+function HoleEntry({ st, ev, hole, setHole, setScore }) {
+  const course = ev.course, par = course.par[hole];
   return (
     <div>
       <div className="holehead">
@@ -506,15 +582,17 @@ function HoleEntry({R,course,hole,setHole,setScore,ev}) {
           <div className="hmeta">Par {par} · SI {course.hcp[hole]}</div></div>
         <button className="nav" onClick={()=>setHole(h=>Math.min(17,h+1))} disabled={hole===17}>›</button>
       </div>
-      {R.groups.map((g,gi)=>(
+      {st.groups.map((g,gi)=>(
         <div key={gi}>
           <div className="ghline">Group {gi+1}</div>
           {g.map(p=>{
-            const v = R.scores[p][hole];
-            const net = netOn(v, R.hcp[p], course.hcp[hole]);
+            const v = st.scores[p][hole];
+            const nt = netOf(v, ev.chc[p], course.hcp[hole]);
+            const sp = ev.f.pick==="sfsum" ? sfPts(nt, par) : null;
             return (
               <div className={"erow t"+teamOf(p)} key={p}>
-                <div className="ename">{p}<em>{net!=null?`net ${net}`:"—"}</em></div>
+                <div className="ename">{p}
+                  <em>{nt!=null ? `net ${nt}${sp!=null?` · ${sp} pt${sp===1?"":"s"}`:""}` : `hcp ${ev.chc[p]}`}</em></div>
                 <div className="quick">
                   {[par-1,par,par+1,par+2,par+3].map(n=>
                     <button key={n} className={v===n?"q on":"q"}
@@ -525,23 +603,25 @@ function HoleEntry({R,course,hole,setHole,setScore,ev}) {
               </div>);
           })}
           {ev.results.filter(r=>r.group===gi).map(m=>{
-            const x=m.holes[hole];
+            const x = m.holes[hole];
             return <div className="holeres" key={m.key}>
-              <span>{m.a.join("/")} v {m.b.join("/")} — {x.w==="A"?`${TEAM_A.short} wins`:x.w==="B"?`${TEAM_B.short} wins`:x.w==="H"?"Halved":"—"}</span>
-              <span className="hr2">{m.text}</span></div>;
+              <span>{m.a.join("/")} v {m.b.join("/")} — {x.a ?? "·"} to {x.b ?? "·"}</span>
+              <span className="hr2">{x.w==="A"?`${TEAM_A.short} wins hole`:x.w==="B"?`${TEAM_B.short} wins hole`:x.w==="H"?"Halved":"—"}</span>
+            </div>;
           })}
         </div>))}
-      {f.scope==="combined" && (()=>{
+      {ev.f.scope==="all" && (()=>{
         const x = ev.results[0].holes[hole];
         return <div className="holeres">
-          <span>Hole {hole+1} — {TEAM_A.short} {x.a ?? "·"} · {TEAM_B.short} {x.b ?? "·"}</span>
-          <span className="hr2">{ev.results[0].text}</span></div>;
+          <span>{TEAM_A.short} {x.a ?? "·"} · {TEAM_B.short} {x.b ?? "·"}</span>
+          <span className="hr2">{x.w==="A"?`${TEAM_A.short} wins hole`:x.w==="B"?`${TEAM_B.short} wins hole`:x.w==="H"?"Halved":"—"}</span>
+        </div>;
       })()}
       <div className="dots18">
         {Array.from({length:18}).map((_,i)=>{
-          const roster = R.groups.flat();
-          const done = roster.length && roster.every(p=>R.scores[p][i]!=null);
-          const some = roster.some(p=>R.scores[p][i]!=null);
+          const roster = st.groups.flat();
+          const done = roster.length && roster.every(p=>st.scores[p][i]!=null);
+          const some = roster.some(p=>st.scores[p][i]!=null);
           return <button key={i} className={"d "+(i===hole?"cur ":"")+(done?"full":some?"part":"")}
             onClick={()=>setHole(i)}>{i+1}</button>;
         })}
@@ -551,7 +631,7 @@ function HoleEntry({R,course,hole,setHole,setScore,ev}) {
 }
 
 /* ─── ARCHIVE ────────────────────────────────────────────────── */
-function Archive({archive,onDelete}) {
+function Archive({ archive, onDelete }) {
   const [openId,setOpen] = useState(null);
   if (!archive.length) return (
     <div className="pad"><div className="empty"><b>No rounds archived yet</b>
@@ -565,31 +645,39 @@ function Archive({archive,onDelete}) {
         return (
           <div className="gcard" key={a.id}>
             <div className="ghead click" onClick={()=>setOpen(o=>o===a.id?null:a.id)}>
-              <span className="gtitle">R{a.roundN} · {c.name}</span>
+              <span className="gtitle">R{a.roundN} · {c.short}</span>
               <span className="gsub">{FORMATS[a.format].label} · {fmt(a.aPts)}–{fmt(a.bPts)}</span>
             </div>
             {openId===a.id && (<>
               <div className="scroll">
                 <table className="card">
                   <thead>
-                    <tr><th className="stick">Hole</th>{H.map(h=><th key={h}>{h+1}</th>)}<th>Tot</th></tr>
-                    <tr className="par"><th className="stick">Par</th>{H.map(h=><td key={h}>{c.par[h]}</td>)}<td>{sum(c.par)}</td></tr>
+                    <tr><th className="stick">Hole</th>{H.map(h=><th key={h}>{h+1}</th>)}<th>Gross</th><th>Net</th></tr>
+                    <tr className="par"><th className="stick">Par</th>{H.map(h=><td key={h}>{c.par[h]}</td>)}
+                      <td>{sum(c.par)}</td><td/></tr>
                   </thead>
                   <tbody>
-                    {a.groups.flat().map(p=>(
-                      <tr key={p} className={"t"+teamOf(p)}>
-                        <th className="stick">{p} <em>{a.hcp[p]}</em></th>
-                        {H.map(h=><td key={h} className={cls(a.scores[p][h],c.par[h])}>{a.scores[p][h] ?? "·"}</td>)}
-                        <td className="tot">{sum(a.scores[p])||"–"}</td>
-                      </tr>))}
+                    {a.groups.flat().map(p=>{
+                      const nets = a.scores[p].map((v,h)=>netOf(v, a.chc[p], c.hcp[h]));
+                      return (
+                        <tr key={p} className={"t"+teamOf(p)}>
+                          <th className="stick">{p} <em>{a.chc[p]}</em></th>
+                          {H.map(h=><td key={h} className={cls(a.scores[p][h],c.par[h])}>
+                            {a.scores[p][h] ?? "·"}
+                            {nets[h]!=null && <i className="netbadge">{nets[h]}</i>}</td>)}
+                          <td className="tot">{sum(a.scores[p])||"–"}</td>
+                          <td className="tot">{sum(nets)||"–"}</td>
+                        </tr>);
+                    })}
                   </tbody>
                 </table>
               </div>
               <div className="arcfoot">
-                <div>{a.results.map((r,i)=><span key={i} className="rchip">{r.a.join("/")} v {r.b.join("/")} · {r.text}</span>)}</div>
+                <div>{a.results.map((r,i)=>
+                  <span key={i} className="rchip">{r.a.join("/")} v {r.b.join("/")} · {fmt(r.aPts)}–{fmt(r.bPts)}</span>)}</div>
                 <button className="del" onClick={()=>onDelete(a.id)}>Remove</button>
               </div>
-              <div className="hint pad-in">Saved {a.date} · {a.tee} tees</div>
+              <div className="hint pad-in">Saved {a.date} · {a.tee} tees · played off {Math.round(ALLOWANCE*100)}%</div>
             </>)}
           </div>);
       })}
@@ -598,9 +686,9 @@ function Archive({archive,onDelete}) {
 }
 
 /* ─── STATS ──────────────────────────────────────────────────── */
-function Stats({archive}) {
+function Stats({ archive }) {
   const [scope,setScope] = useState("all");
-  const [sortK,setSortK] = useState("net");
+  const [basis,setBasis] = useState("net");
   if (!archive.length) return (
     <div className="pad"><div className="empty"><b>Stats appear once rounds are archived</b>
       <p>This tab reads only from saved scorecards, so nothing here shifts while a round is still in play.</p>
@@ -608,24 +696,27 @@ function Stats({archive}) {
 
   const src = scope==="all" ? archive : archive.filter(a=>String(a.roundN)===scope);
   const rows = ALL.map(p=>{
-    let holes=0,gross=0,net=0,toPar=0,e=0,b=0,pr=0,bo=0,d=0,rds=0;
+    let holes=0, gross=0, net=0, toPar=0, sf=0, e=0,b=0,pr=0,bo=0,d=0, rds=0;
     src.forEach(a=>{
       const c = COURSES[a.course]; let any=false;
       (a.scores[p]||[]).forEach((v,h)=>{
-        if(v==null) return;
-        any=true; holes++; gross+=v; toPar+=v-c.par[h];
-        net += netOn(v, a.hcp[p], c.hcp[h]);
-        const diff=v-c.par[h];
+        if (v==null) return;
+        any=true; holes++; gross+=v;
+        const nt = netOf(v, a.chc[p], c.hcp[h]);
+        net += nt; sf += sfPts(nt, c.par[h]);
+        const ref = basis==="net" ? nt : v;
+        const diff = ref - c.par[h];
+        toPar += diff;
         if(diff<=-2)e++; else if(diff===-1)b++; else if(diff===0)pr++; else if(diff===1)bo++; else d++;
       });
       if(any) rds++;
     });
-    return {p,rds,holes,toPar,e,b,pr,bo,d,
-            avg: holes?gross/holes*18:0, avgNet: holes?net/holes*18:0};
+    return { p, rds, holes, toPar, sf, e,b,pr,bo,d,
+             avg: holes ? (basis==="net"?net:gross)/holes*18 : 0 };
   }).filter(r=>r.holes);
 
-  const sorted = [...rows].sort((x,y)=>
-    sortK==="net" ? x.avgNet-y.avgNet : sortK==="gross" ? x.avg-y.avg : (y.b+y.e)-(x.b+x.e));
+  const sorted = [...rows].sort((x,y)=>x.avg-y.avg);
+  const L = basis==="net" ? "Net" : "Gross";
 
   return (
     <div className="pad">
@@ -633,56 +724,61 @@ function Stats({archive}) {
         <select value={scope} onChange={e=>setScope(e.target.value)}>
           <option value="all">All archived rounds</option>
           {[...archive].sort((a,b)=>a.roundN-b.roundN).map(a=>
-            <option key={a.id} value={String(a.roundN)}>R{a.roundN} · {COURSES[a.course].name}</option>)}
+            <option key={a.id} value={String(a.roundN)}>R{a.roundN} · {COURSES[a.course].short}</option>)}
         </select>
-        <select value={sortK} onChange={e=>setSortK(e.target.value)}>
-          <option value="net">Sort by net average</option>
-          <option value="gross">Sort by gross average</option>
-          <option value="birdies">Sort by birdies+</option>
-        </select>
+        <div className="toggle">
+          <button className={basis==="net"?"on":""} onClick={()=>setBasis("net")}>Net</button>
+          <button className={basis==="gross"?"on":""} onClick={()=>setBasis("gross")}>Gross</button>
+        </div>
       </div>
       <div className="scroll card-wrap">
         <table className="std">
-          <thead><tr><th>Player</th><th>Rds</th><th>Holes</th><th>Gross 18</th><th>Net 18</th>
-            <th>+/–</th><th>Eag</th><th>Bird</th><th>Par</th><th>Bog</th><th>Dbl+</th></tr></thead>
+          <thead><tr><th>Player</th><th>Rds</th><th>Holes</th><th>{L} 18</th><th>{L} +/–</th>
+            <th>Stbl</th><th>Eag</th><th>Bird</th><th>Par</th><th>Bog</th><th>Dbl+</th></tr></thead>
           <tbody>
             {sorted.map(r=>(
               <tr key={r.p} className={"t"+teamOf(r.p)}>
                 <td><b>{r.p}</b></td><td>{r.rds}</td><td>{r.holes}</td>
-                <td>{r.avg.toFixed(1)}</td><td className="hl">{r.avgNet.toFixed(1)}</td>
+                <td className="hl">{r.avg.toFixed(1)}</td>
                 <td>{(r.toPar>0?"+":"")+r.toPar}</td>
+                <td>{r.sf}</td>
                 <td>{r.e}</td><td>{r.b}</td><td>{r.pr}</td><td>{r.bo}</td><td>{r.d}</td>
               </tr>))}
           </tbody>
         </table>
       </div>
-      <p className="note">Averages scale to 18 holes so partial rounds stay comparable.</p>
+      <p className="note">Averages scale to 18 holes so partial rounds stay comparable. Birdie and bogey
+        counts follow the basis you pick — net counts them against net par. Stbl is total net Stableford points.</p>
     </div>
   );
 }
 
-/* ─── STANDINGS ──────────────────────────────────────────────── */
-function Standings({list,allEv,totals}) {
+/* ─── POINTS ─────────────────────────────────────────────────── */
+function Standings({ allEv, totals }) {
   return (
     <div className="pad">
-      <Big a={totals.a} b={totals.b} mid="of 12"/>
+      <Big a={totals.a} b={totals.b} mid={`of ${TOTAL_PTS}`}/>
       <div className="card-wrap">
         <table className="std">
-          <thead><tr><th>Round</th><th>Format</th><th>Pts</th><th>{TEAM_A.name}</th><th>{TEAM_B.name}</th></tr></thead>
+          <thead><tr><th>Round</th><th>Format</th><th>Avail</th>
+            <th>{TEAM_A.short}</th><th>{TEAM_B.short}</th></tr></thead>
           <tbody>
-            {list.map((r,i)=>(
+            {ROUNDS.map((r,i)=>(
               <tr key={r.n}>
-                <td><b>R{r.n}</b><br/><span className="sm">{COURSES[r.course].name}</span></td>
+                <td><b>R{r.n}</b><br/><span className="sm">{COURSES[r.course].short}</span></td>
                 <td className="sm">{FORMATS[r.format].label}</td>
-                <td>{FORMATS[r.format].pts}</td>
+                <td>{roundPts(r)}</td>
                 <td className={allEv[i].aPts>allEv[i].bPts?"win":""}>{fmt(allEv[i].aPts)}</td>
                 <td className={allEv[i].bPts>allEv[i].aPts?"win":""}>{fmt(allEv[i].bPts)}</td>
               </tr>))}
           </tbody>
-          <tfoot><tr><td colSpan={3}>Total</td><td>{fmt(totals.a)}</td><td>{fmt(totals.b)}</td></tr></tfoot>
+          <tfoot><tr><td colSpan={2}>Total</td><td>{TOTAL_PTS}</td>
+            <td>{fmt(totals.a)}</td><td>{fmt(totals.b)}</td></tr></tfoot>
         </table>
       </div>
-      <p className="note">Placeholder scheme: 2 points per 4v4 round, 1 per individual match. Send the real one and I'll swap it.</p>
+      <p className="note">Every match splits into front nine, back nine and overall. A tie in any
+        segment splits its points. Points appear as soon as a segment has a hole in it, so the
+        total moves live and settles when the nine is complete.</p>
     </div>
   );
 }
@@ -692,15 +788,17 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{--paper:#F2F2EE;--ink:#0B1F3A;--blue:#1B5FA8;--blueL:#3E86D6;--blueF:#E4ECF6;
- --rust:#A9522E;--rustF:#F3E7E0;--rule:#D8D8D0;--mut:#6C7480;}
+ --rust:#A9522E;--rustF:#F3E7E0;--rule:#D8D8D0;--mut:#6C7480;--gold:#B8873B;}
 body{background:var(--paper);}
 .app{font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--paper);
- max-width:820px;margin:0 auto;min-height:100vh;padding-bottom:60px;}
+ max-width:880px;margin:0 auto;min-height:100vh;padding-bottom:60px;}
 .pad{padding:14px;}
 .note{font-size:12px;color:var(--mut);margin-top:12px;line-height:1.5;}
 .sm{font-size:11px;color:var(--mut);}
 .hint{font-size:11px;color:var(--mut);margin:6px 0 2px;display:block;}
 .pad-in{padding:0 12px 10px;}
+.warn{background:#FBF3E4;border:1px solid #E6D4AE;color:#7A5B18;border-radius:9px;
+ padding:9px 11px;font-size:12px;margin-bottom:10px;line-height:1.45;}
 
 .top{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;
  background:var(--ink);color:var(--paper);}
@@ -709,10 +807,10 @@ body{background:var(--paper);}
 .tally{font-family:'Saira Condensed';font-size:29px;font-weight:700;font-variant-numeric:tabular-nums;
  display:flex;align-items:center;gap:7px;}
 .tick{height:26px;width:26px;object-fit:contain;border-radius:5px;background:rgba(255,255,255,.07);padding:1px;}
-.sm-crest{height:17px;width:17px;vertical-align:-3px;margin-right:5px;background:none;padding:0;}
+.sm-crest{height:16px;width:16px;vertical-align:-3px;margin-right:4px;background:none;padding:0;}
 .crest{height:46px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
 .crest img{max-height:46px;max-width:100%;object-fit:contain;}
-.tally .tA{color:var(--blueL);}.tally .tB{color:#E08A62;}.tally .dash{color:#4A5F7D;margin:0 6px;}
+.tally .tA{color:var(--blueL);}.tally .tB{color:#E08A62;}.tally .dash{color:#4A5F7D;margin:0 2px;}
 
 .roundbar{background:#fff;border-bottom:1px solid var(--rule);padding:9px 14px;}
 select{font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);border:1px solid var(--rule);
@@ -721,8 +819,8 @@ select{font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);border:
 .rmeta{font-size:11px;color:var(--mut);margin-top:5px;}
 
 .tabs{display:flex;background:#fff;border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:6;}
-.tabs button{flex:1;padding:11px 2px;border:0;background:none;cursor:pointer;font-family:'Saira Condensed';
- font-size:13px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut);
+.tabs button{flex:1;padding:11px 1px;border:0;background:none;cursor:pointer;font-family:'Saira Condensed';
+ font-size:12.5px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--mut);
  border-bottom:3px solid transparent;}
 .tabs button.on{color:var(--ink);border-bottom-color:var(--blue);}
 
@@ -740,32 +838,45 @@ select{font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);border:
 .cname{font-family:'Saira Condensed';font-size:21px;font-weight:700;}
 .csub{font-size:11px;color:var(--mut);}
 .fmtpill{background:var(--ink);color:var(--paper);font-size:10px;letter-spacing:1.3px;
- text-transform:uppercase;padding:6px 10px;border-radius:20px;white-space:nowrap;}
+ text-transform:uppercase;padding:6px 10px;border-radius:20px;text-align:center;}
 .blurb{font-size:12.5px;color:var(--mut);margin-bottom:12px;line-height:1.5;}
 
 .tracker{background:#fff;border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin-bottom:12px;}
 .trk-h{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--ink);
  color:var(--paper);font-family:'Saira Condensed';font-size:12px;letter-spacing:2px;text-transform:uppercase;}
 .trk-pts{color:#8FA6C4;letter-spacing:1px;}
-.trk-r{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;padding:9px 12px;
- border-top:1px solid var(--rule);}
+.trk-m{border-top:1px solid var(--rule);padding:9px 12px;}
+.trk-r{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;}
 .trk-t{font-size:12.5px;color:var(--mut);}
 .trk-t.right{text-align:right;}
 .trk-t.lead{color:var(--ink);font-weight:700;}
-.trk-s{font-family:'Saira Condensed';font-size:14px;font-weight:600;letter-spacing:.8px;padding:3px 9px;
- border-radius:6px;background:var(--paper);white-space:nowrap;}
-.trk-s.aL{background:var(--blueF);color:var(--blue);}
-.trk-s.bL{background:var(--rustF);color:var(--rust);}
+.trk-s{font-family:'Saira Condensed';font-size:12px;letter-spacing:1px;color:var(--mut);
+ background:var(--paper);border-radius:6px;padding:2px 8px;white-space:nowrap;}
+
+/* segment strip */
+.segs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
+.seg{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:6px;text-align:center;}
+.segs.compact .seg{padding:5px 4px;}
+.seg-l{font-family:'Saira Condensed';font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut);}
+.seg-v{font-family:'Saira Condensed';font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;
+ display:flex;justify-content:center;gap:4px;}
+.seg-v b{color:var(--mut);font-weight:700;}
+.seg-v b.lead{color:var(--ink);}
+.seg-u{font-size:9px;color:var(--mut);}
+.seg-p{font-size:11px;font-weight:700;margin-top:3px;border-radius:5px;padding:1px 0;
+ background:#fff;color:var(--mut);font-variant-numeric:tabular-nums;}
+.seg-p.pA{background:var(--blueF);color:var(--blue);}
+.seg-p.pB{background:var(--rustF);color:var(--rust);}
 
 .disc{width:100%;text-align:left;background:#fff;border:1px solid var(--rule);border-radius:10px;
  padding:11px 12px;font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;margin-bottom:10px;}
 .setup{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:13px;margin-bottom:12px;}
+.lockrow{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mut);
+ background:var(--paper);border-radius:8px;padding:8px 10px;flex-wrap:wrap;}
+.lockpill{background:var(--ink);color:var(--paper);font-size:9px;letter-spacing:1.4px;text-transform:uppercase;
+ padding:3px 7px;border-radius:12px;}
 .sethead{font-family:'Saira Condensed';font-size:12px;letter-spacing:2px;text-transform:uppercase;
  color:var(--mut);margin:14px 0 7px;}
-.setup .sethead:first-child{margin-top:0;}
-.row2{display:flex;gap:8px;margin-bottom:8px;}
-.row2 select{flex:1;min-width:0;}
-select.full{width:100%;}
 .grpbox{border:1px solid var(--rule);border-radius:9px;padding:9px;margin-bottom:7px;}
 .grpname{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut);margin-bottom:6px;}
 .chips{display:flex;flex-wrap:wrap;gap:5px;}
@@ -774,12 +885,6 @@ select.full{width:100%;}
 .chip i{font-style:normal;opacity:.4;font-size:10px;}
 .chip.tA{background:var(--blueF);color:var(--blue);border-color:#C6D9EE;}
 .chip.tB{background:var(--rustF);color:var(--rust);border-color:#E8D2C6;}
-.hgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:5px;}
-.hcell{display:flex;align-items:center;justify-content:space-between;gap:5px;border:1px solid var(--rule);
- border-radius:8px;padding:5px 7px;font-size:11.5px;}
-.hcell.tA{background:var(--blueF);}.hcell.tB{background:var(--rustF);}
-.hcell input{width:36px;border:0;background:#fff;border-radius:5px;padding:4px;text-align:center;
- font-family:Inter;font-weight:700;font-size:13px;color:var(--ink);}
 .pairrow{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
 .pairrow select{flex:1;min-width:0;}
 .pairrow .pA{background:var(--blueF);}.pairrow .pB{background:var(--rustF);}
@@ -800,6 +905,9 @@ select.full{width:100%;}
 .gsub{font-size:11px;color:var(--mut);text-align:right;}
 .ghline{font-family:'Saira Condensed';font-size:12px;letter-spacing:2px;text-transform:uppercase;
  color:var(--mut);margin:12px 0 6px;}
+.matchfoot{padding:10px 12px 12px;border-top:1px solid var(--rule);}
+.mf-h{font-size:12px;font-weight:600;margin-bottom:2px;}
+.mf-h span{color:var(--mut);font-weight:400;margin:0 4px;}
 
 .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 .card-wrap{background:#fff;border:1px solid var(--rule);border-radius:12px;overflow:hidden;}
@@ -814,23 +922,47 @@ tr.par td{background:var(--paper);font-weight:600;}
 tr.hcp td{color:var(--mut);font-size:10px;}
 tr.tA .stick{border-left:3px solid var(--blue);}
 tr.tB .stick{border-left:3px solid var(--rust);}
-td.cell{padding:0!important;position:relative;}
-td.cell input{width:30px;height:30px;border:0;background:transparent;text-align:center;
+td.cell{padding:0!important;position:relative;height:34px;}
+td.cell input{width:34px;height:34px;border:0;background:transparent;text-align:center;
  font-family:Inter;font-size:13px;font-weight:600;color:inherit;padding:0;}
 td.cell input:focus{outline:2px solid var(--blue);outline-offset:-2px;background:#fff;}
+.netbadge{position:absolute;bottom:0;right:2px;font-style:normal;font-size:8.5px;font-weight:700;
+ color:var(--blue);line-height:1;pointer-events:none;}
+tr.tB .netbadge{color:var(--rust);}
 td.eagle{background:#F6D98A;font-weight:700;}
-td.birdie{background:var(--blueF);color:var(--blue);}
+td.birdie{background:var(--blueF);}
 td.bogey{background:#F6EDE7;}
-td.dbl{background:var(--rustF);color:var(--rust);}
+td.dbl{background:var(--rustF);}
 td.tot{font-weight:700;background:var(--paper);}
 .dots{position:absolute;top:1px;right:2px;font-style:normal;font-size:7px;color:var(--mut);line-height:1;}
-tr.resrow th,tr.resrow td{background:#F7F8F5;border-top:2px solid var(--rule);font-size:11px;}
+tr.cntrow th,tr.cntrow td{background:#F7F8F5;font-size:11.5px;font-weight:700;}
+tr.cntrow.tA th{border-left:3px solid var(--blue);}
+tr.cntrow.tB th{border-left:3px solid var(--rust);}
+tr.resrow th,tr.resrow td{background:#EFF1EC;border-top:1px solid var(--rule);
+ border-bottom:2px solid var(--rule);font-size:11px;}
 td.res{font-weight:700;}
 td.rA{background:var(--blueF);color:var(--blue);}
 td.rB{background:var(--rustF);color:var(--rust);}
 td.rH{color:var(--mut);}
-td.restot{font-family:'Saira Condensed';font-size:12px;letter-spacing:.6px;font-weight:600;}
-.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--mut);padding:8px 12px;}
+.legend{display:flex;gap:11px;flex-wrap:wrap;font-size:10.5px;color:var(--mut);padding:8px 12px;}
+.legend b{color:var(--ink);}
+.lgnet{color:var(--blue);}
+
+/* handicap table */
+table.hcptable{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums;}
+table.hcptable th,table.hcptable td{padding:5px 4px;text-align:center;border-bottom:1px solid var(--rule);
+ white-space:nowrap;}
+table.hcptable thead th{font-family:'Saira Condensed';font-size:11px;letter-spacing:1px;color:var(--mut);}
+th.grp-raw{background:var(--paper);}
+th.grp-play{background:var(--blueF);color:var(--blue);}
+table.hcptable td.cell{padding:0!important;height:34px;}
+table.hcptable td.cell input{width:44px;height:34px;border:0;background:transparent;text-align:center;
+ font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);}
+table.hcptable td.cell input:focus{outline:2px solid var(--blue);outline-offset:-2px;background:#fff;}
+td.playcell{background:var(--blueF);color:var(--blue);font-weight:700;min-width:40px;}
+.hnote{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:12px;margin-bottom:12px;}
+.hnote b{font-family:'Saira Condensed';font-size:15px;letter-spacing:1.2px;text-transform:uppercase;}
+.hnote p{font-size:12px;color:var(--mut);margin-top:5px;line-height:1.5;}
 
 .holehead{display:flex;align-items:center;justify-content:space-between;background:var(--ink);
  color:var(--paper);border-radius:12px;padding:11px 8px;margin-bottom:10px;}
@@ -840,7 +972,7 @@ td.restot{font-family:'Saira Condensed';font-size:12px;letter-spacing:.6px;font-
 .nav{width:44px;height:44px;border:0;background:rgba(255,255,255,.1);color:#fff;border-radius:10px;
  font-size:22px;cursor:pointer;}
 .nav:disabled{opacity:.25;}
-.erow{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center;background:#fff;
+.erow{display:grid;grid-template-columns:104px 1fr;gap:8px;align-items:center;background:#fff;
  border:1px solid var(--rule);border-radius:10px;padding:7px;margin-bottom:6px;}
 .erow.tA{border-left:4px solid var(--blue);}.erow.tB{border-left:4px solid var(--rust);}
 .ename{font-size:12.5px;font-weight:600;}
@@ -872,8 +1004,12 @@ td.restot{font-family:'Saira Condensed';font-size:12px;letter-spacing:.6px;font-
 .empty b{font-family:'Saira Condensed';font-size:17px;letter-spacing:1px;}
 .empty p{font-size:12.5px;color:var(--mut);margin-top:6px;line-height:1.5;}
 
-.filters{display:flex;gap:8px;margin-bottom:10px;}
+.filters{display:flex;gap:8px;margin-bottom:10px;align-items:stretch;}
 .filters select{flex:1;min-width:0;}
+.toggle{display:flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff;}
+.toggle button{border:0;background:none;padding:0 14px;font-family:Inter;font-size:12.5px;font-weight:600;
+ color:var(--mut);cursor:pointer;}
+.toggle button.on{background:var(--ink);color:var(--paper);}
 table.std{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;
  font-variant-numeric:tabular-nums;}
 table.std th{font-family:'Saira Condensed';font-size:11px;letter-spacing:1.1px;text-transform:uppercase;
@@ -887,10 +1023,15 @@ table.std tr.tB td:first-child{box-shadow:inset 3px 0 0 var(--rust);}
 .minitable{margin-top:16px;background:#fff;border:1px solid var(--rule);border-radius:12px;overflow:hidden;}
 .mt-h{font-family:'Saira Condensed';font-size:12px;letter-spacing:2px;text-transform:uppercase;
  padding:9px 13px;background:var(--paper);color:var(--mut);}
-.mt-r{display:flex;align-items:center;gap:10px;padding:9px 13px;border-top:1px solid var(--rule);font-size:12.5px;}
+.mt-r{display:flex;align-items:center;gap:9px;padding:9px 13px;border-top:1px solid var(--rule);font-size:12.5px;}
 .mt-n{font-family:'Saira Condensed';font-weight:700;color:var(--blue);width:24px;}
 .mt-c{flex:1;color:var(--mut);}
 .mt-s{font-size:11px;color:var(--mut);}
-.mt-p{font-variant-numeric:tabular-nums;font-weight:600;min-width:52px;text-align:right;}
-@media(max-width:480px){.sval{font-size:40px;}.erow{grid-template-columns:82px 1fr;}}
+.mt-p{font-variant-numeric:tabular-nums;font-weight:700;}
+.mt-w{font-size:11px;color:var(--mut);}
+@media(max-width:480px){
+  .sval{font-size:38px;}.erow{grid-template-columns:92px 1fr;}
+  .tabs button{font-size:11px;letter-spacing:.5px;}
+  .seg-v{font-size:15px;}
+}
 `;
