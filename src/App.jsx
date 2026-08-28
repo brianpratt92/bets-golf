@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { supabase, SYNC_ON } from "./supabase";
 import underdawgzLogo from "./assets/underdawgz.png";
 import lifemaxxingLogo from "./assets/lifemaxxing.png";
 
@@ -156,6 +157,52 @@ function evalRound(round, st, hcpTable) {
   };
 }
 
+/* ─── WRITE QUEUE ────────────────────────────────────────────────
+   Every write goes through here. If a write fails — dead spot on the
+   course, phone asleep — it stays queued and retries, so a lost signal
+   costs nothing but a delay. */
+function useWriteQueue() {
+  const q = useRef([]);
+  const busy = useRef(false);
+  const [pending, setPending] = useState(0);
+  const [failing, setFailing] = useState(false);
+
+  const flush = useCallback(async () => {
+    if (busy.current || !q.current.length) return;
+    busy.current = true;
+    while (q.current.length) {
+      try {
+        const { error } = await q.current[0]();
+        if (error) throw error;
+        q.current.shift();
+        setPending(q.current.length);
+        setFailing(false);
+      } catch {
+        busy.current = false;
+        setFailing(true);
+        setTimeout(flush, 4000);
+        return;
+      }
+    }
+    busy.current = false;
+  }, []);
+
+  const push = useCallback(fn => {
+    if (!SYNC_ON) return;
+    q.current.push(fn);
+    setPending(q.current.length);
+    flush();
+  }, [flush]);
+
+  useEffect(() => {
+    const on = () => flush();
+    window.addEventListener("online", on);
+    return () => window.removeEventListener("online", on);
+  }, [flush]);
+
+  return { push, pending, failing };
+}
+
 /* ─── APP ────────────────────────────────────────────────────── */
 export default function App() {
   const [tab,setTab] = useState("live");
@@ -166,6 +213,8 @@ export default function App() {
     return [r.n, { groups, pairs: pairsFromGroups(groups), scores: emptyScores() }];
   })));
   const [archive,setArchive] = useState([]);
+  const [loaded,setLoaded] = useState(!SYNC_ON);
+  const { push, pending, failing } = useWriteQueue();
 
   const round = ROUNDS.find(r=>r.n===roundN);
   const st = state[roundN];
@@ -173,41 +222,146 @@ export default function App() {
   const allEv = useMemo(()=>ROUNDS.map(r=>evalRound(r, state[r.n], hcpTable)), [state, hcpTable]);
   const totals = allEv.reduce((t,r)=>({a:t.a+r.aPts, b:t.b+r.bPts}), {a:0,b:0});
 
-  const patch = obj => setState(s => ({ ...s, [roundN]: { ...s[roundN], ...obj } }));
-  const setScore = (p,h,v) => setState(s => {
-    const cur = s[roundN];
-    const scores = { ...cur.scores, [p]: [...cur.scores[p]] };
-    scores[p][h] = v;
-    return { ...s, [roundN]: { ...cur, scores } };
-  });
-  const hasScores = ALL.some(p => st.scores[p].some(v => v != null));
-  const clearScores = () => {
-    if (!window.confirm(`Clear all scores for Round ${roundN}?`)) return;
-    patch({ scores: emptyScores() });
+  /* ── initial load ── */
+  useEffect(() => {
+    if (!SYNC_ON) return;
+    let dead = false;
+    (async () => {
+      const [h, s, g, a] = await Promise.all([
+        supabase.from("bets_handicaps").select("*"),
+        supabase.from("bets_scores").select("*"),
+        supabase.from("bets_groups").select("*"),
+        supabase.from("bets_archive").select("*").order("round_n"),
+      ]);
+      if (dead) return;
+      if (h.data?.length) setHcpTable(t => {
+        const n = clone(t);
+        h.data.forEach(r => { if (n[r.course_key] && r.player in n[r.course_key])
+          n[r.course_key][r.player] = r.raw_hcp==null ? "" : Number(r.raw_hcp); });
+        return n;
+      });
+      setState(prev => {
+        const n = clone(prev);
+        g.data?.forEach(r => { if (n[r.round_n]) { n[r.round_n].groups = r.groups; n[r.round_n].pairs = r.pairs; } });
+        s.data?.forEach(r => { if (n[r.round_n]?.scores[r.player]) n[r.round_n].scores[r.player][r.hole] = r.gross; });
+        return n;
+      });
+      if (a.data?.length) setArchive(a.data.map(r => r.payload));
+      setLoaded(true);
+    })();
+    return () => { dead = true; };
+  }, []);
+
+  /* ── live updates from other phones ── */
+  useEffect(() => {
+    if (!SYNC_ON) return;
+    const ch = supabase.channel("bets-live")
+      .on("postgres_changes", { event:"*", schema:"public", table:"bets_scores" }, ({ eventType, new:nw, old }) => {
+        const r = eventType === "DELETE" ? old : nw;
+        if (!r) return;
+        setState(prev => {
+          const cur = prev[r.round_n];
+          if (!cur?.scores[r.player]) return prev;
+          const scores = { ...cur.scores, [r.player]: [...cur.scores[r.player]] };
+          scores[r.player][r.hole] = eventType === "DELETE" ? null : r.gross;
+          return { ...prev, [r.round_n]: { ...cur, scores } };
+        });
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"bets_handicaps" }, ({ new:nw }) => {
+        if (!nw) return;
+        setHcpTable(t => t[nw.course_key]
+          ? { ...t, [nw.course_key]: { ...t[nw.course_key],
+              [nw.player]: nw.raw_hcp==null ? "" : Number(nw.raw_hcp) } }
+          : t);
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"bets_groups" }, ({ new:nw }) => {
+        if (!nw) return;
+        setState(prev => prev[nw.round_n]
+          ? { ...prev, [nw.round_n]: { ...prev[nw.round_n], groups:nw.groups, pairs:nw.pairs } }
+          : prev);
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"bets_archive" }, async () => {
+        const { data } = await supabase.from("bets_archive").select("*").order("round_n");
+        if (data) setArchive(data.map(r => r.payload));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  /* ── writes ── */
+  const setScore = (p,h,v) => {
+    setState(s => {
+      const cur = s[roundN];
+      const scores = { ...cur.scores, [p]: [...cur.scores[p]] };
+      scores[p][h] = v;
+      return { ...s, [roundN]: { ...cur, scores } };
+    });
+    push(() => v == null
+      ? supabase.from("bets_scores").delete().match({ round_n:roundN, player:p, hole:h })
+      : supabase.from("bets_scores").upsert(
+          { round_n:roundN, player:p, hole:h, gross:v, updated_at:new Date().toISOString() },
+          { onConflict:"round_n,player,hole" }));
+  };
+
+  const setHcp = (courseKey, player, raw) => {
+    setHcpTable(t => ({ ...t, [courseKey]: { ...t[courseKey], [player]: raw } }));
+    push(() => supabase.from("bets_handicaps").upsert(
+      { course_key:courseKey, player, raw_hcp: raw==="" ? null : Number(raw),
+        updated_at:new Date().toISOString() },
+      { onConflict:"course_key,player" }));
+  };
+
+  const saveGroups = (groups, pairs) => {
+    setState(s => ({ ...s, [roundN]: { ...s[roundN], groups, pairs } }));
+    push(() => supabase.from("bets_groups").upsert(
+      { round_n:roundN, groups, pairs, updated_at:new Date().toISOString() },
+      { onConflict:"round_n" }));
   };
   const moveToGroup = (player, to) => {
     const groups = st.groups.map(g => g.filter(p => p !== player));
     groups[to] = [...groups[to], player];
-    patch({ groups, pairs: pairsFromGroups(groups) });
+    saveGroups(groups, pairsFromGroups(groups));
+  };
+  const setPairs = pairs => saveGroups(st.groups, pairs);
+
+  const hasScores = ALL.some(p => st.scores[p].some(v => v != null));
+  const clearScores = () => {
+    if (!window.confirm(`Clear all scores for Round ${roundN}? This clears them for everyone.`)) return;
+    setState(s => ({ ...s, [roundN]: { ...s[roundN], scores: emptyScores() } }));
+    push(() => supabase.from("bets_scores").delete().eq("round_n", roundN));
   };
 
   const saveToArchive = () => {
-    setArchive(a => [{ id:Date.now(), roundN, date:new Date().toLocaleString(),
+    const payload = { id:Date.now(), roundN, date:new Date().toLocaleString(),
       course:round.course, tee:round.tee, format:round.format,
       groups:clone(st.groups), chc:{...ev.chc},
       raw:Object.fromEntries(ALL.map(p=>[p, hcpTable[round.course][p]])),
       scores:clone(st.scores), aPts:ev.aPts, bPts:ev.bPts,
       results:ev.results.map(r=>({ a:r.a, b:r.b, aPts:r.aPts, bPts:r.bPts,
-        front:[r.front.a,r.front.b], back:[r.back.a,r.back.b], overall:[r.overall.a,r.overall.b] })) },
-      ...a.filter(x=>x.roundN!==roundN)]);
+        front:[r.front.a,r.front.b], back:[r.back.a,r.back.b], overall:[r.overall.a,r.overall.b] })) };
+    setArchive(a => [payload, ...a.filter(x=>x.roundN!==roundN)]);
+    push(() => supabase.from("bets_archive").upsert(
+      { round_n:roundN, payload, saved_at:new Date().toISOString() },
+      { onConflict:"round_n" }));
     setTab("archive");
+  };
+  const removeArchive = roundNum => {
+    setArchive(a => a.filter(x => x.roundN !== roundNum));
+    push(() => supabase.from("bets_archive").delete().eq("round_n", roundNum));
   };
 
   return (<>
     <style>{CSS}</style>
     <div className="app">
       <header className="top">
-        <div><div className="wordmark">BETS</div><div className="tag">St. George · Sept 10–13</div></div>
+        <div>
+          <div className="wordmark">BETS</div>
+          <div className="tag">St. George · Sept 10–13
+            <i className={"sync "+(!SYNC_ON?"off":failing?"bad":pending?"wait":"ok")}>
+              {!SYNC_ON ? "local only" : failing ? `retrying ${pending}` : pending ? `saving ${pending}` : "live"}
+            </i>
+          </div>
+        </div>
         <div className="tally">
           <img className="tick" src={TEAM_A.logo} alt={TEAM_A.name}/>
           <span className="tA">{fmt(totals.a)}</span><span className="dash">–</span>
@@ -227,13 +381,14 @@ export default function App() {
           ["stats","Stats"],["std","Points"]]
           .map(([id,l])=><button key={id} className={tab===id?"on":""} onClick={()=>setTab(id)}>{l}</button>)}
       </nav>
+      {!loaded && <div className="loading">Loading scores…</div>}
       {tab==="live"    && <Live round={round} ev={ev} totals={totals} allEv={allEv}/>}
       {tab==="round"   && <Round key={roundN} round={round} st={st} ev={ev} setScore={setScore}
                             clearScores={clearScores} moveToGroup={moveToGroup} hasScores={hasScores}
-                            patch={patch} onArchive={saveToArchive}
+                            setPairs={setPairs} onArchive={saveToArchive}
                             archived={archive.some(a=>a.roundN===roundN)}/>}
-      {tab==="hcp"     && <Handicaps hcpTable={hcpTable} setHcpTable={setHcpTable}/>}
-      {tab==="archive" && <Archive archive={archive} onDelete={id=>setArchive(a=>a.filter(x=>x.id!==id))}/>}
+      {tab==="hcp"     && <Handicaps hcpTable={hcpTable} setHcp={setHcp}/>}
+      {tab==="archive" && <Archive archive={archive} onDelete={removeArchive}/>}
       {tab==="stats"   && <Stats archive={archive}/>}
       {tab==="std"     && <Standings allEv={allEv} totals={totals}/>}
     </div>
@@ -326,9 +481,9 @@ function Live({ round, ev, totals, allEv }) {
 }
 
 /* ─── HANDICAPS ──────────────────────────────────────────────── */
-function Handicaps({ hcpTable, setHcpTable }) {
+function Handicaps({ hcpTable, setHcp }) {
   const keys = Object.keys(COURSES);
-  const set = (ck, p, v) => setHcpTable(t => ({ ...t, [ck]: { ...t[ck], [p]: v==="" ? "" : +v } }));
+  const set = (ck, p, v) => setHcp(ck, p, v==="" ? "" : +v);
   return (
     <div className="pad">
       <div className="hnote">
@@ -377,7 +532,7 @@ function Handicaps({ hcpTable, setHcpTable }) {
 }
 
 /* ─── ROUND ──────────────────────────────────────────────────── */
-function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, patch, onArchive, archived }) {
+function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, setPairs, onArchive, archived }) {
   const [open,setOpen] = useState(!hasScores);
   const [mode,setMode] = useState("card");
   const [hole,setHole] = useState(0);
@@ -417,12 +572,12 @@ function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, p
                 {(st.pairs[gi]||[]).map((pr,j)=>(
                   <div className="pairrow" key={j}>
                     <select className="pA" value={pr[0]} onChange={e=>{
-                      const pairs=clone(st.pairs); pairs[gi][j][0]=e.target.value; patch({pairs});}}>
+                      const pairs=clone(st.pairs); pairs[gi][j][0]=e.target.value; setPairs(pairs);}}>
                       {g.filter(p=>teamOf(p)==="A").map(p=><option key={p}>{p}</option>)}
                     </select>
                     <span className="vs">v</span>
                     <select className="pB" value={pr[1]} onChange={e=>{
-                      const pairs=clone(st.pairs); pairs[gi][j][1]=e.target.value; patch({pairs});}}>
+                      const pairs=clone(st.pairs); pairs[gi][j][1]=e.target.value; setPairs(pairs);}}>
                       {g.filter(p=>teamOf(p)==="B").map(p=><option key={p}>{p}</option>)}
                     </select>
                   </div>))}
@@ -643,12 +798,12 @@ function Archive({ archive, onDelete }) {
         const c = COURSES[a.course];
         const H = Array.from({length:18},(_,i)=>i);
         return (
-          <div className="gcard" key={a.id}>
-            <div className="ghead click" onClick={()=>setOpen(o=>o===a.id?null:a.id)}>
+          <div className="gcard" key={a.roundN}>
+            <div className="ghead click" onClick={()=>setOpen(o=>o===a.roundN?null:a.roundN)}>
               <span className="gtitle">R{a.roundN} · {c.short}</span>
               <span className="gsub">{FORMATS[a.format].label} · {fmt(a.aPts)}–{fmt(a.bPts)}</span>
             </div>
-            {openId===a.id && (<>
+            {openId===a.roundN && (<>
               <div className="scroll">
                 <table className="card">
                   <thead>
@@ -675,7 +830,7 @@ function Archive({ archive, onDelete }) {
               <div className="arcfoot">
                 <div>{a.results.map((r,i)=>
                   <span key={i} className="rchip">{r.a.join("/")} v {r.b.join("/")} · {fmt(r.aPts)}–{fmt(r.bPts)}</span>)}</div>
-                <button className="del" onClick={()=>onDelete(a.id)}>Remove</button>
+                <button className="del" onClick={()=>onDelete(a.roundN)}>Remove</button>
               </div>
               <div className="hint pad-in">Saved {a.date} · {a.tee} tees · played off {Math.round(ALLOWANCE*100)}%</div>
             </>)}
@@ -724,7 +879,7 @@ function Stats({ archive }) {
         <select value={scope} onChange={e=>setScope(e.target.value)}>
           <option value="all">All archived rounds</option>
           {[...archive].sort((a,b)=>a.roundN-b.roundN).map(a=>
-            <option key={a.id} value={String(a.roundN)}>R{a.roundN} · {COURSES[a.course].short}</option>)}
+            <option key={a.roundN} value={String(a.roundN)}>R{a.roundN} · {COURSES[a.course].short}</option>)}
         </select>
         <div className="toggle">
           <button className={basis==="net"?"on":""} onClick={()=>setBasis("net")}>Net</button>
@@ -804,6 +959,13 @@ body{background:var(--paper);}
  background:var(--ink);color:var(--paper);}
 .wordmark{font-family:'Saira Condensed';font-weight:700;font-size:29px;letter-spacing:6px;line-height:1;}
 .tag{font-size:10px;letter-spacing:2.2px;text-transform:uppercase;color:#8FA6C4;margin-top:3px;}
+.sync{font-style:normal;letter-spacing:1px;margin-left:7px;padding:1px 6px;border-radius:10px;font-size:9px;}
+.sync.ok{background:rgba(110,200,140,.16);color:#8AD8A6;}
+.sync.wait{background:rgba(230,190,90,.16);color:#E8C877;}
+.sync.bad{background:rgba(230,120,90,.18);color:#F0A184;}
+.sync.off{background:rgba(255,255,255,.09);color:#8FA6C4;}
+.loading{padding:10px 14px;font-size:12px;color:var(--mut);background:var(--blueF);
+ border-bottom:1px solid var(--rule);}
 .tally{font-family:'Saira Condensed';font-size:29px;font-weight:700;font-variant-numeric:tabular-nums;
  display:flex;align-items:center;gap:7px;}
 .tick{height:26px;width:26px;object-fit:contain;border-radius:5px;background:rgba(255,255,255,.07);padding:1px;}
