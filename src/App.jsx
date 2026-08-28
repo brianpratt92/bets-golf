@@ -23,9 +23,9 @@ const COURSES = {
 };
 
 /* ─── TEAMS ──────────────────────────────────────────────────── */
-const TEAM_A = { name:"UnderDawgz",  short:"Dawgz",    logo:underdawgzLogo,
+const TEAM_A = { name:"Lifemaxxing",  short:"Lifemaxx",    logo:lifemaxxingLogo,
                  players:["Mark","Brian","Paul","James"] };
-const TEAM_B = { name:"Lifemaxxing", short:"Lifemaxx", logo:lifemaxxingLogo,
+const TEAM_B = { name:"UnderDawgz", short:"Dawgz", logo:underdawgzLogo,
                  players:["Adam","Casey","Michael","Timothy"] };
 const ALL = [...TEAM_A.players, ...TEAM_B.players];
 const teamOf = p => TEAM_A.players.includes(p) ? "A" : "B";
