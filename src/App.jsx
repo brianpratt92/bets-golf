@@ -23,9 +23,9 @@ const COURSES = {
 };
 
 /* ─── TEAMS ──────────────────────────────────────────────────── */
-const TEAM_A = { name:"Lifemaxxing",  short:"Lifemaxx",    logo:lifemaxxingLogo,
+const TEAM_A = { name:"Lifemaxxing", short:"Lifemaxx", logo:lifemaxxingLogo,
                  players:["Mark","Brian","Paul","James"] };
-const TEAM_B = { name:"UnderDawgz", short:"Dawgz", logo:underdawgzLogo,
+const TEAM_B = { name:"UnderDawgz",  short:"Dawgz",    logo:underdawgzLogo,
                  players:["Adam","Casey","Michael","Timothy"] };
 const ALL = [...TEAM_A.players, ...TEAM_B.players];
 const teamOf = p => TEAM_A.players.includes(p) ? "A" : "B";
@@ -108,10 +108,18 @@ function segment(holes, from, to, mode, segPts) {
     if (mode === "holes") { if (h.w==="A") a++; else if (h.w==="B") b++; }
     else { a += h.a; b += h.b; }
   }
+  const total = to - from;
+  const left = total - played;
+  const done = played === total;
+  /* match play can end early: more holes up than holes remaining */
+  const clinched = mode==="holes" && played>0 && Math.abs(a-b) > left;
+  const settled = done || clinched;
   const winner = !played ? null : a===b ? "tie" : a>b ? "A" : "B";
-  const aPts = !played ? 0 : winner==="A" ? segPts : winner==="tie" ? segPts/2 : 0;
-  const bPts = !played ? 0 : winner==="B" ? segPts : winner==="tie" ? segPts/2 : 0;
-  return { a, b, played, total: to-from, winner, aPts, bPts, done: played === to-from };
+  const aPts = settled ? (winner==="A" ? segPts : winner==="tie" ? segPts/2 : 0) : 0;
+  const bPts = settled ? (winner==="B" ? segPts : winner==="tie" ? segPts/2 : 0) : 0;
+  /* 3&2 style label once a match segment is clinched */
+  const label = clinched && !done ? `${Math.abs(a-b)}&${left}` : null;
+  return { a, b, played, total, left, winner, aPts, bPts, done, settled, label };
 }
 
 function evalMatch(m, f, ctx) {
@@ -146,11 +154,25 @@ function buildMatches(round, groups, pairs) {
 function evalRound(round, st, hcpTable) {
   const course = COURSES[round.course];
   const f = FORMATS[round.format];
+  /* full 90% figure — used for the archive and the Stats tab */
   const chc = Object.fromEntries(ALL.map(p => [p, playing(hcpTable[round.course][p])]));
-  const ctx = { scores: st.scores, chc, course };
-  const results = buildMatches(round, st.groups, st.pairs).map(m => evalMatch(m, f, ctx));
+
+  /* Every match plays off its own low handicap: the lowest player in the
+     match gets zero strokes and everyone else gets the difference.
+     2v2 uses the four in that foursome, the 4v4 uses all eight,
+     singles uses the two in that match. */
+  const rel = {};
+  const results = buildMatches(round, st.groups, st.pairs).map(m => {
+    const roster = [...m.a, ...m.b];
+    const low = roster.length ? Math.min(...roster.map(p => chc[p])) : 0;
+    const mRel = Object.fromEntries(roster.map(p => [p, chc[p] - low]));
+    Object.assign(rel, mRel);
+    const r = evalMatch(m, f, { scores: st.scores, chc: mRel, course });
+    return { ...r, low, rel: mRel };
+  });
+
   return {
-    results, chc, f, course,
+    results, chc, rel, f, course,
     aPts: results.reduce((t,r)=>t+r.aPts, 0),
     bPts: results.reduce((t,r)=>t+r.bPts, 0),
     played: Math.max(0, ...results.map(r=>r.played)),
@@ -334,7 +356,7 @@ export default function App() {
   const saveToArchive = () => {
     const payload = { id:Date.now(), roundN, date:new Date().toLocaleString(),
       course:round.course, tee:round.tee, format:round.format,
-      groups:clone(st.groups), chc:{...ev.chc},
+      groups:clone(st.groups), chc:{...ev.chc}, rel:{...ev.rel},
       raw:Object.fromEntries(ALL.map(p=>[p, hcpTable[round.course][p]])),
       scores:clone(st.scores), aPts:ev.aPts, bPts:ev.bPts,
       results:ev.results.map(r=>({ a:r.a, b:r.b, aPts:r.aPts, bPts:r.bPts,
@@ -428,9 +450,11 @@ function Segments({ m, mode, compact }) {
             <span>–</span>
             <b className={s.winner==="B"?"lead":""}>{s.b}</b>
           </div>
-          <div className="seg-u">{s.played ? `${unit} · ${s.played}/${s.total}` : "—"}</div>
-          <div className={"seg-p"+(s.aPts>s.bPts?" pA":s.bPts>s.aPts?" pB":"")}>
-            {s.played ? `${fmt(s.aPts)} – ${fmt(s.bPts)}` : "0 – 0"}
+          <div className="seg-u">
+            {!s.played ? "—" : s.label ? s.label : `${unit} · ${s.played}/${s.total}`}
+          </div>
+          <div className={"seg-p"+(!s.settled?" open":s.aPts>s.bPts?" pA":s.bPts>s.aPts?" pB":"")}>
+            {!s.played ? "0 – 0" : s.settled ? `${fmt(s.aPts)} – ${fmt(s.bPts)}` : "in play"}
           </div>
         </div>))}
     </div>
@@ -492,7 +516,7 @@ function Handicaps({ hcpTable, setHcp }) {
            off {Math.round(ALLOWANCE*100)}% of that number, rounded to the nearest stroke, and every
            scorecard pulls its allowance from this table.</p>
       </div>
-      <div className="scroll card-wrap">
+      <div className="card-wrap"><div className="scroll">
         <table className="hcptable">
           <thead>
             <tr>
@@ -521,7 +545,8 @@ function Handicaps({ hcpTable, setHcp }) {
               </tr>))}
           </tbody>
         </table>
-      </div>
+      </div></div>
+      <div className="swipe">Swipe the table sideways for the rest of the courses</div>
       <div className="legend">
         {keys.map(k=><span key={k}><b>{COURSES[k].code}</b> {COURSES[k].short}</span>)}
       </div>
@@ -607,8 +632,10 @@ function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, s
       <button className="archivebtn" onClick={onArchive}>
         {archived ? "Update archived round" : "Save round to archive"}
       </button>
-      <p className="note">Gross scores are what you enter. Net is gross minus the {Math.round(ALLOWANCE*100)}%
-        allowance from the Hcps tab, and net is what settles every match.</p>
+      <p className="note">Gross scores are what you enter. Every match plays off the lowest
+        {" "}{Math.round(ALLOWANCE*100)}% handicap in that match — the low player is scratch and
+        everyone else gets the difference. The Stats tab still uses each player's full
+        {" "}{Math.round(ALLOWANCE*100)}% handicap, so net averages stay comparable across rounds.</p>
     </div>
   );
 }
@@ -633,19 +660,20 @@ function GroupCard({ gi, group, st, ev, setScore }) {
           <tbody>
             {group.map(p=>{
               const g = st.scores[p];
+              const sk = ev.rel[p] ?? ev.chc[p];
               return (
                 <tr key={p} className={"t"+teamOf(p)}>
-                  <th className="stick">{p} <em>{ev.chc[p]}</em></th>
+                  <th className="stick">{p} <em className={sk===0?"scr":""}>{sk}</em></th>
                   {H.map(h=>{
-                    const nt = netOf(g[h], ev.chc[p], course.hcp[h]);
+                    const nt = netOf(g[h], sk, course.hcp[h]);
                     return (
                       <td key={h} className={"cell "+cls(g[h],course.par[h])}>
                         <input inputMode="numeric" value={g[h] ?? ""} onChange={e=>{
                           const v=e.target.value.replace(/\D/g,"");
                           setScore(p,h,v===""?null:Math.min(19,+v));}}/>
                         {nt!=null && <i className="netbadge">{nt}</i>}
-                        {strokesOnHole(ev.chc[p],course.hcp[h])>0 &&
-                          <i className="dots">{"•".repeat(Math.min(strokesOnHole(ev.chc[p],course.hcp[h]),3))}</i>}
+                        {strokesOnHole(sk,course.hcp[h])>0 &&
+                          <i className="dots">{"•".repeat(Math.min(strokesOnHole(sk,course.hcp[h]),3))}</i>}
                       </td>);
                   })}
                   <td className="tot">{sum(g.slice(0,9))||"–"}</td>
@@ -660,6 +688,7 @@ function GroupCard({ gi, group, st, ev, setScore }) {
       <div className="legend">
         <span>big = gross</span><span className="lgnet">small = net</span>
         <span>• stroke received</span>
+        <span>strokes off the low handicap in the match</span>
         {f.mode==="holes" && <><span>▲ {TEAM_A.short}</span><span>▼ {TEAM_B.short}</span></>}
       </div>
       {mine.map(m => (
@@ -727,6 +756,30 @@ function MatchCard({ m, ev, title }) {
 }
 
 /* ─── HOLE ENTRY ─────────────────────────────────────────────── */
+const SCORE_CHOICES = Array.from({length:14},(_,i)=>i+1); // 1 through 14
+
+/* Horizontal strip of absolute scores. Opens showing 2 onward, since
+   an ace is rare and 2–8 covers nearly every hole. Swipe left for 1,
+   right for 9 and up. */
+function ScoreStrip({ value, par, onPick }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const first = el.querySelector("button");
+    if (first) el.scrollLeft = first.offsetWidth + 4;
+  }, []);
+  return (
+    <div className="quick" ref={ref}>
+      {SCORE_CHOICES.map(n => (
+        <button key={n}
+          className={"q "+(value===n ? "on " : "")+cls(n, par)}
+          onClick={()=>onPick(value===n ? null : n)}>{n}</button>
+      ))}
+    </div>
+  );
+}
+
 function HoleEntry({ st, ev, hole, setHole, setScore }) {
   const course = ev.course, par = course.par[hole];
   return (
@@ -742,19 +795,17 @@ function HoleEntry({ st, ev, hole, setHole, setScore }) {
           <div className="ghline">Group {gi+1}</div>
           {g.map(p=>{
             const v = st.scores[p][hole];
-            const nt = netOf(v, ev.chc[p], course.hcp[hole]);
+            const sk = ev.rel[p] ?? ev.chc[p];
+            const nt = netOf(v, sk, course.hcp[hole]);
             const sp = ev.f.pick==="sfsum" ? sfPts(nt, par) : null;
+            const gets = strokesOnHole(sk, course.hcp[hole]);
             return (
               <div className={"erow t"+teamOf(p)} key={p}>
                 <div className="ename">{p}
-                  <em>{nt!=null ? `net ${nt}${sp!=null?` · ${sp} pt${sp===1?"":"s"}`:""}` : `hcp ${ev.chc[p]}`}</em></div>
-                <div className="quick">
-                  {[par-1,par,par+1,par+2,par+3].map(n=>
-                    <button key={n} className={v===n?"q on":"q"}
-                      onClick={()=>setScore(p,hole,v===n?null:n)}>{n}</button>)}
-                  <button className="q wide" onClick={()=>setScore(p,hole,Math.max(1,(v??par)-1))}>−</button>
-                  <button className="q wide" onClick={()=>setScore(p,hole,(v??par)+1)}>+</button>
-                </div>
+                  <em>{nt!=null
+                    ? `net ${nt}${sp!=null?` · ${sp} pt${sp===1?"":"s"}`:""}`
+                    : `${sk} strokes${gets?` · ${gets} here`:""}`}</em></div>
+                <ScoreStrip value={v} par={par} onPick={n=>setScore(p,hole,n)}/>
               </div>);
           })}
           {ev.results.filter(r=>r.group===gi).map(m=>{
@@ -788,6 +839,22 @@ function HoleEntry({ st, ev, hole, setHole, setScore }) {
 /* ─── ARCHIVE ────────────────────────────────────────────────── */
 function Archive({ archive, onDelete }) {
   const [openId,setOpen] = useState(null);
+  const [armed,setArmed] = useState(null);
+
+  const confirmDelete = (a) => {
+    const c = COURSES[a.course];
+    const holes = ALL.reduce((t,p)=>t + (a.scores[p]||[]).filter(v=>v!=null).length, 0);
+    if (!window.confirm(
+      `Remove Round ${a.roundN} — ${c.name}?\n\n` +
+      `This deletes ${holes} entered scores and takes the round out of Stats. ` +
+      `It is removed for everyone, not just this phone.`)) { setArmed(null); return; }
+    if (!window.confirm(
+      `Last chance.\n\nRound ${a.roundN} (${fmt(a.aPts)}–${fmt(a.bPts)}) cannot be recovered ` +
+      `once deleted. Press OK only if you are sure.`)) { setArmed(null); return; }
+    onDelete(a.roundN);
+    setArmed(null);
+  };
+
   if (!archive.length) return (
     <div className="pad"><div className="empty"><b>No rounds archived yet</b>
       <p>Finish a round on the Round tab and save it. Archived cards are what the Stats tab reads.</p>
@@ -830,7 +897,12 @@ function Archive({ archive, onDelete }) {
               <div className="arcfoot">
                 <div>{a.results.map((r,i)=>
                   <span key={i} className="rchip">{r.a.join("/")} v {r.b.join("/")} · {fmt(r.aPts)}–{fmt(r.bPts)}</span>)}</div>
-                <button className="del" onClick={()=>onDelete(a.roundN)}>Remove</button>
+                {armed===a.roundN
+                  ? <span className="delarm">
+                      <button className="del go" onClick={()=>confirmDelete(a)}>Yes, remove</button>
+                      <button className="del keep" onClick={()=>setArmed(null)}>Keep</button>
+                    </span>
+                  : <button className="del" onClick={()=>setArmed(a.roundN)}>Remove</button>}
               </div>
               <div className="hint pad-in">Saved {a.date} · {a.tee} tees · played off {Math.round(ALLOWANCE*100)}%</div>
             </>)}
@@ -858,8 +930,9 @@ function Stats({ archive }) {
         if (v==null) return;
         any=true; holes++; gross+=v;
         const nt = netOf(v, a.chc[p], c.hcp[h]);
-        net += nt; sf += sfPts(nt, c.par[h]);
+        net += nt;
         const ref = basis==="net" ? nt : v;
+        sf += sfPts(ref, c.par[h]);
         const diff = ref - c.par[h];
         toPar += diff;
         if(diff<=-2)e++; else if(diff===-1)b++; else if(diff===0)pr++; else if(diff===1)bo++; else d++;
@@ -886,10 +959,10 @@ function Stats({ archive }) {
           <button className={basis==="gross"?"on":""} onClick={()=>setBasis("gross")}>Gross</button>
         </div>
       </div>
-      <div className="scroll card-wrap">
+      <div className="card-wrap"><div className="scroll">
         <table className="std">
           <thead><tr><th>Player</th><th>Rds</th><th>Holes</th><th>{L} 18</th><th>{L} +/–</th>
-            <th>Stbl</th><th>Eag</th><th>Bird</th><th>Par</th><th>Bog</th><th>Dbl+</th></tr></thead>
+            <th>{L} Stbl</th><th>Eag</th><th>Bird</th><th>Par</th><th>Bog</th><th>Dbl+</th></tr></thead>
           <tbody>
             {sorted.map(r=>(
               <tr key={r.p} className={"t"+teamOf(r.p)}>
@@ -901,9 +974,12 @@ function Stats({ archive }) {
               </tr>))}
           </tbody>
         </table>
-      </div>
-      <p className="note">Averages scale to 18 holes so partial rounds stay comparable. Birdie and bogey
-        counts follow the basis you pick — net counts them against net par. Stbl is total net Stableford points.</p>
+      </div></div>
+      <div className="swipe">Swipe the table sideways for the rest of the columns</div>
+      <p className="note">Averages scale to 18 holes so partial rounds stay comparable. Every column
+        follows the basis you pick — gross Stableford scores off the card, net Stableford applies each
+        player's full {Math.round(ALLOWANCE*100)}% handicap. Gross Stableford totals will look low,
+        since a scratch scoring table is unforgiving to a mid handicap.</p>
     </div>
   );
 }
@@ -913,7 +989,7 @@ function Standings({ allEv, totals }) {
   return (
     <div className="pad">
       <Big a={totals.a} b={totals.b} mid={`of ${TOTAL_PTS}`}/>
-      <div className="card-wrap">
+      <div className="card-wrap"><div className="scroll">
         <table className="std">
           <thead><tr><th>Round</th><th>Format</th><th>Avail</th>
             <th>{TEAM_A.short}</th><th>{TEAM_B.short}</th></tr></thead>
@@ -930,7 +1006,7 @@ function Standings({ allEv, totals }) {
           <tfoot><tr><td colSpan={2}>Total</td><td>{TOTAL_PTS}</td>
             <td>{fmt(totals.a)}</td><td>{fmt(totals.b)}</td></tr></tfoot>
         </table>
-      </div>
+      </div></div>
       <p className="note">Every match splits into front nine, back nine and overall. A tie in any
         segment splits its points. Points appear as soon as a segment has a hole in it, so the
         total moves live and settles when the nine is complete.</p>
@@ -1029,6 +1105,8 @@ select{font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);border:
  background:#fff;color:var(--mut);font-variant-numeric:tabular-nums;}
 .seg-p.pA{background:var(--blueF);color:var(--blue);}
 .seg-p.pB{background:var(--rustF);color:var(--rust);}
+.seg-p.open{background:transparent;border:1px dashed var(--rule);color:var(--mut);
+ font-weight:500;font-size:10px;letter-spacing:.5px;}
 
 .disc{width:100%;text-align:left;background:#fff;border:1px solid var(--rule);border-radius:10px;
  padding:11px 12px;font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;margin-bottom:10px;}
@@ -1071,8 +1149,10 @@ select{font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);border:
 .mf-h{font-size:12px;font-weight:600;margin-bottom:2px;}
 .mf-h span{color:var(--mut);font-weight:400;margin:0 4px;}
 
-.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;}
 .card-wrap{background:#fff;border:1px solid var(--rule);border-radius:12px;overflow:hidden;}
+.swipe{font-size:10.5px;color:var(--mut);margin-top:6px;letter-spacing:.3px;}
+@media(min-width:700px){.swipe{display:none;}}
 table.card{border-collapse:collapse;font-size:12px;width:100%;font-variant-numeric:tabular-nums;}
 table.card th,table.card td{padding:4px 3px;text-align:center;border-bottom:1px solid var(--rule);white-space:nowrap;}
 table.card thead th{font-family:'Saira Condensed';font-size:11px;letter-spacing:.8px;color:var(--mut);padding:6px 3px;}
@@ -1080,6 +1160,7 @@ table.card thead th{font-family:'Saira Condensed';font-size:11px;letter-spacing:
  font-size:11px;padding:4px 8px 4px 6px!important;box-shadow:1px 0 0 var(--rule);}
 .stick em{color:var(--mut);font-style:normal;font-size:10px;background:var(--paper);
  border-radius:4px;padding:1px 4px;margin-left:3px;}
+.stick em.scr{background:var(--ink);color:var(--paper);}
 tr.par td{background:var(--paper);font-weight:600;}
 tr.hcp td{color:var(--mut);font-size:10px;}
 tr.tA .stick{border-left:3px solid var(--blue);}
@@ -1111,13 +1192,17 @@ td.rH{color:var(--mut);}
 .lgnet{color:var(--blue);}
 
 /* handicap table */
-table.hcptable{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums;}
+table.hcptable{border-collapse:collapse;width:100%;min-width:620px;font-size:12px;
+ font-variant-numeric:tabular-nums;}
 table.hcptable th,table.hcptable td{padding:5px 4px;text-align:center;border-bottom:1px solid var(--rule);
  white-space:nowrap;}
 table.hcptable thead th{font-family:'Saira Condensed';font-size:11px;letter-spacing:1px;color:var(--mut);}
 th.grp-raw{background:var(--paper);}
 th.grp-play{background:var(--blueF);color:var(--blue);}
 table.hcptable td.cell{padding:0!important;height:34px;}
+table.hcptable th.stick{position:sticky;left:0;z-index:3;background:#fff;
+ box-shadow:1px 0 0 var(--rule);text-align:left!important;}
+table.hcptable thead th.stick{background:var(--paper);}
 table.hcptable td.cell input{width:44px;height:34px;border:0;background:transparent;text-align:center;
  font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);}
 table.hcptable td.cell input:focus{outline:2px solid var(--blue);outline-offset:-2px;background:#fff;}
@@ -1134,16 +1219,21 @@ td.playcell{background:var(--blueF);color:var(--blue);font-weight:700;min-width:
 .nav{width:44px;height:44px;border:0;background:rgba(255,255,255,.1);color:#fff;border-radius:10px;
  font-size:22px;cursor:pointer;}
 .nav:disabled{opacity:.25;}
-.erow{display:grid;grid-template-columns:104px 1fr;gap:8px;align-items:center;background:#fff;
+.erow{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;align-items:center;background:#fff;
  border:1px solid var(--rule);border-radius:10px;padding:7px;margin-bottom:6px;}
 .erow.tA{border-left:4px solid var(--blue);}.erow.tB{border-left:4px solid var(--rust);}
 .ename{font-size:12.5px;font-weight:600;}
 .ename em{display:block;font-style:normal;font-size:10px;color:var(--mut);font-weight:400;}
-.quick{display:flex;gap:4px;}
-.q{flex:1;min-width:0;height:36px;border:1px solid var(--rule);background:var(--paper);border-radius:8px;
- font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;}
-.q.on{background:var(--blue);border-color:var(--blue);color:#fff;}
-.q.wide{flex:.65;color:var(--mut);}
+.quick{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+ scroll-snap-type:x proximity;padding-bottom:2px;scrollbar-width:none;}
+.quick::-webkit-scrollbar{display:none;}
+.q{flex:0 0 40px;height:40px;border:1px solid var(--rule);background:var(--paper);border-radius:8px;
+ font-family:Inter;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;scroll-snap-align:start;}
+.q.eagle{background:#FBF0D2;}
+.q.birdie{background:var(--blueF);}
+.q.bogey{background:#FAF3EF;}
+.q.dbl{background:var(--rustF);}
+.q.on{background:var(--ink)!important;border-color:var(--ink);color:#fff;}
 .holeres{font-size:12px;background:#fff;border:1px solid var(--rule);border-radius:9px;
  padding:8px 10px;margin:2px 0 10px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
 .hr2{color:var(--mut);}
@@ -1162,6 +1252,9 @@ td.playcell{background:var(--blueF);color:var(--blue);font-weight:700;min-width:
  padding:4px 9px;font-size:11px;margin:0 5px 5px 0;}
 .del{border:1px solid var(--rule);background:#fff;color:var(--rust);border-radius:7px;padding:6px 12px;
  font-size:12px;font-family:Inter;cursor:pointer;}
+.delarm{display:inline-flex;gap:6px;}
+.del.go{background:var(--rust);border-color:var(--rust);color:#fff;font-weight:600;}
+.del.keep{color:var(--mut);}
 .empty{background:#fff;border:1px dashed var(--rule);border-radius:12px;padding:28px 20px;text-align:center;}
 .empty b{font-family:'Saira Condensed';font-size:17px;letter-spacing:1px;}
 .empty p{font-size:12.5px;color:var(--mut);margin-top:6px;line-height:1.5;}
@@ -1172,8 +1265,12 @@ td.playcell{background:var(--blueF);color:var(--blue);font-weight:700;min-width:
 .toggle button{border:0;background:none;padding:0 14px;font-family:Inter;font-size:12.5px;font-weight:600;
  color:var(--mut);cursor:pointer;}
 .toggle button.on{background:var(--ink);color:var(--paper);}
-table.std{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;
+table.std{width:100%;min-width:600px;border-collapse:collapse;font-size:12.5px;background:#fff;
  font-variant-numeric:tabular-nums;}
+table.std th:first-child,table.std td:first-child{position:sticky;left:0;z-index:2;
+ background:#fff;box-shadow:1px 0 0 var(--rule);}
+table.std th:first-child{background:var(--paper);}
+table.std tfoot td:first-child{background:var(--paper);}
 table.std th{font-family:'Saira Condensed';font-size:11px;letter-spacing:1.1px;text-transform:uppercase;
  color:var(--mut);text-align:left;padding:9px 8px;background:var(--paper);white-space:nowrap;}
 table.std td{padding:9px 8px;border-top:1px solid var(--rule);white-space:nowrap;}
@@ -1192,7 +1289,8 @@ table.std tr.tB td:first-child{box-shadow:inset 3px 0 0 var(--rust);}
 .mt-p{font-variant-numeric:tabular-nums;font-weight:700;}
 .mt-w{font-size:11px;color:var(--mut);}
 @media(max-width:480px){
-  .sval{font-size:38px;}.erow{grid-template-columns:92px 1fr;}
+  .sval{font-size:38px;}.erow{grid-template-columns:88px minmax(0,1fr);}
+  .q{flex:0 0 38px;height:38px;}
   .tabs button{font-size:11px;letter-spacing:.5px;}
   .seg-v{font-size:15px;}
 }
