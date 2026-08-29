@@ -372,6 +372,18 @@ export default function App() {
     push(() => supabase.from("bets_archive").delete().eq("round_n", roundNum));
   };
 
+  const resetAll = () => {
+    if (!window.confirm(
+      "Clear ALL scores and ALL archived rounds for every round?\n\n" +
+      "Handicaps and groups are kept. This affects everyone.")) return;
+    if (!window.confirm("Last chance — this cannot be undone. Press OK to wipe.")) return;
+    setState(s => Object.fromEntries(
+      Object.entries(s).map(([n,r]) => [n, { ...r, scores: emptyScores() }])));
+    setArchive([]);
+    push(() => supabase.from("bets_scores").delete().gte("round_n", 0));
+    push(() => supabase.from("bets_archive").delete().gte("round_n", 0));
+  };
+
   return (<>
     <style>{CSS}</style>
     <div className="app">
@@ -412,7 +424,7 @@ export default function App() {
       {tab==="hcp"     && <Handicaps hcpTable={hcpTable} setHcp={setHcp}/>}
       {tab==="archive" && <Archive archive={archive} onDelete={removeArchive}/>}
       {tab==="stats"   && <Stats archive={archive}/>}
-      {tab==="std"     && <Standings allEv={allEv} totals={totals}/>}
+      {tab==="std"     && <Standings allEv={allEv} totals={totals} resetAll={resetAll}/>}
     </div>
   </>);
 }
@@ -609,7 +621,6 @@ function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, s
                 {!(st.pairs[gi]||[]).length && <span className="hint">Needs a player from each team.</span>}
               </div>))}
           </>)}
-          {hasScores && <button className="clearbtn" onClick={clearScores}>Clear this round's scores</button>}
         </div>
       )}
 
@@ -629,13 +640,20 @@ function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, s
 
       {f.scope==="all" && <MatchCard m={ev.results[0]} ev={ev} title="4v4 aggregate — best 3 net"/>}
 
-      <button className="archivebtn" onClick={onArchive}>
-        {archived ? "Update archived round" : "Save round to archive"}
-      </button>
+      <div className="endbar">
+        <button className="archivebtn" onClick={onArchive}>
+          {archived ? "Update archived round" : "Save round to archive"}
+        </button>
+        {hasScores &&
+          <button className="clearbtn wide" onClick={clearScores}>Clear this round's scores</button>}
+      </div>
       <p className="note">Gross scores are what you enter. Every match plays off the lowest
         {" "}{Math.round(ALLOWANCE*100)}% handicap in that match — the low player is scratch and
         everyone else gets the difference. The Stats tab still uses each player's full
         {" "}{Math.round(ALLOWANCE*100)}% handicap, so net averages stay comparable across rounds.</p>
+      <p className="note">Clearing wipes this round's scores for everyone and does not touch the
+        archive. Removing a round from the Archive tab does not clear these scores either — the two
+        are stored separately.</p>
     </div>
   );
 }
@@ -985,7 +1003,7 @@ function Stats({ archive }) {
 }
 
 /* ─── POINTS ─────────────────────────────────────────────────── */
-function Standings({ allEv, totals }) {
+function Standings({ allEv, totals, resetAll }) {
   return (
     <div className="pad">
       <Big a={totals.a} b={totals.b} mid={`of ${TOTAL_PTS}`}/>
@@ -1008,8 +1026,16 @@ function Standings({ allEv, totals }) {
         </table>
       </div></div>
       <p className="note">Every match splits into front nine, back nine and overall. A tie in any
-        segment splits its points. Points appear as soon as a segment has a hole in it, so the
-        total moves live and settles when the nine is complete.</p>
+        segment splits its points. A segment pays out once its holes are played, or earlier if one
+        side is up more holes than remain.</p>
+      <div className="resetbox">
+        <div>
+          <b>Start over</b>
+          <p>Wipes every round's scores and the whole archive. Handicaps and groups stay. Use this
+             to clear out test data before the trip.</p>
+        </div>
+        <button className="clearbtn" onClick={resetAll}>Reset everything</button>
+      </div>
     </div>
   );
 }
@@ -1131,6 +1157,12 @@ select{font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);border:
 .vs{font-family:'Saira Condensed';color:var(--mut);font-size:13px;}
 .clearbtn{width:100%;margin-top:14px;padding:10px;border:1px solid var(--rule);background:var(--paper);
  color:var(--rust);border-radius:8px;font-family:Inter;font-size:12.5px;font-weight:600;cursor:pointer;}
+.endbar{margin-top:6px;}
+.clearbtn.wide{margin-top:8px;}
+.resetbox{margin-top:18px;background:#fff;border:1px dashed var(--rule);border-radius:12px;padding:13px;}
+.resetbox b{font-family:'Saira Condensed';font-size:14px;letter-spacing:1.4px;text-transform:uppercase;}
+.resetbox p{font-size:11.5px;color:var(--mut);margin-top:4px;line-height:1.5;}
+.resetbox .clearbtn{margin-top:10px;}
 
 .modebar{display:flex;gap:6px;margin-bottom:10px;}
 .modebar button{flex:1;padding:9px;border:1px solid var(--rule);background:#fff;border-radius:8px;
