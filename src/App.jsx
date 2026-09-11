@@ -39,8 +39,8 @@ const FORMATS = {
              note:"One 2v2 match per foursome. Lowest net ball on each side wins the hole. Front, back and overall worth 1 point each." },
   agg3:    { label:"4v4 Aggregate Match Play", scope:"all",    mode:"holes",  pick:"best3", segPts:2,
              note:"All eight in one match. Three best net scores per side count each hole; lower total wins the hole. Front, back and overall worth 2 points each." },
-  sf2:     { label:"2v2 Aggregate Stableford", scope:"group",  mode:"points", pick:"sfsum", segPts:1,
-             note:"One 2v2 pairing per foursome. Both players' net points count and add up — highest aggregate takes the front nine, the back nine and the total, 1 point each." },
+  sf2:     { label:"2v2 Aggregate Stableford", scope:"group",  mode:"points", pick:"sfsum", segPts:1, full:true,
+             note:"One 2v2 pairing per foursome, everyone off their full 90% course handicap. Both players' net points count and add up — highest aggregate takes the front nine, the back nine and the total, 1 point each." },
   singles: { label:"Singles Match Play",       scope:"group2", mode:"holes",  pick:"best1", segPts:1,
              note:"Two 1v1 matches per foursome. Front, back and overall worth 1 point each, so 3 per match." },
 };
@@ -200,7 +200,10 @@ function evalRound(round, st, hcpTable) {
   const rel = {}, oppOf = {};
   const results = buildMatches(round, st.groups, st.pairs).map(m => {
     const roster = [...m.a, ...m.b];
-    const low = roster.length ? Math.min(...roster.map(p => chc[p])) : 0;
+    /* Most rounds play off the low handicap in the match. Stableford is
+       the exception: everyone strokes off their full 90% course handicap. */
+    const low = f.full ? 0
+      : (roster.length ? Math.min(...roster.map(p => chc[p])) : 0);
     const mRel = Object.fromEntries(roster.map(p => [p, chc[p] - low]));
     Object.assign(rel, mRel);
     if (m.a.length === 1 && m.b.length === 1) { oppOf[m.a[0]] = m.b[0]; oppOf[m.b[0]] = m.a[0]; }
@@ -724,10 +727,13 @@ function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, s
         {hasScores &&
           <button className="clearbtn wide" onClick={clearScores}>Clear this round's scores</button>}
       </div>
-      <p className="note">Gross scores are what you enter. Every match plays off the lowest
-        {" "}{Math.round(ALLOWANCE*100)}% handicap in that match — the low player is scratch and
-        everyone else gets the difference. The Stats tab still uses each player's full
-        {" "}{Math.round(ALLOWANCE*100)}% handicap, so net averages stay comparable across rounds.</p>
+      <p className="note">Gross scores are what you enter. {f.full
+        ? `This round strokes off each player's full ${Math.round(ALLOWANCE*100)}% course handicap
+           straight from the Hcps tab — nobody is reduced to scratch.`
+        : `This round plays off the lowest ${Math.round(ALLOWANCE*100)}% handicap in each match —
+           the low player is scratch and everyone else gets the difference.`} The Stats tab always
+        uses each player's full {Math.round(ALLOWANCE*100)}% handicap, so net averages stay
+        comparable across rounds.</p>
       <p className="note">Clearing wipes this round's scores for everyone and does not touch the
         archive. Removing a round from the Archive tab does not clear these scores either — the two
         are stored separately.</p>
@@ -797,7 +803,9 @@ function GroupCard({ gi, group, st, ev, setScore }) {
       <div className="legend">
         <span>big = gross</span><span className="lgnet">small = net</span>
         <span>• stroke received</span>
-        <span>strokes off the low handicap in the match</span>
+        <span>{f.full
+          ? `strokes off full ${Math.round(ALLOWANCE*100)}% course handicap`
+          : "strokes off the low handicap in the match"}</span>
         {f.mode==="holes" && <><span>▲ {TEAM_A.short}</span><span>▼ {TEAM_B.short}</span></>}
       </div>
       {f.pick==="sfsum" && <SfKey/>}
