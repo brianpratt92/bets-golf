@@ -40,7 +40,7 @@ const FORMATS = {
   agg3:    { label:"4v4 Aggregate Match Play", scope:"all",    mode:"holes",  pick:"best3", segPts:2,
              note:"All eight in one match. Three best net scores per side count each hole; lower total wins the hole. Front, back and overall worth 2 points each." },
   sf2:     { label:"2v2 Aggregate Stableford", scope:"group",  mode:"points", pick:"sfsum", segPts:1,
-             note:"One 2v2 match per foursome. Both net Stableford scores count and accumulate. Front, back and overall worth 1 point each." },
+             note:"One 2v2 pairing per foursome. Both players' net points count and add up — highest aggregate takes the front nine, the back nine and the total, 1 point each." },
   singles: { label:"Singles Match Play",       scope:"group2", mode:"holes",  pick:"best1", segPts:1,
              note:"Two 1v1 matches per foursome. Front, back and overall worth 1 point each, so 3 per match." },
 };
@@ -67,6 +67,29 @@ const pairsFromGroups = groups => groups.map(g => {
   return a.map((p,i) => b[i] ? [p, b[i]] : null).filter(Boolean);
 });
 
+/* Saved pairings can drift out of step with the groups — someone moves
+   foursome, or the same name gets picked in both dropdowns. This keeps
+   whatever is still valid, drops the rest, and pairs off anyone left over,
+   so every player in a foursome ends up in exactly one match. */
+function resolvePairs(groups, pairs) {
+  return groups.map((g, i) => {
+    const aPool = g.filter(p => teamOf(p)==="A");
+    const bPool = g.filter(p => teamOf(p)==="B");
+    const usedA = new Set(), usedB = new Set(), out = [];
+    (pairs?.[i] || []).forEach(pr => {
+      if (!Array.isArray(pr) || pr.length < 2) return;
+      const [x, y] = pr;
+      if (aPool.includes(x) && bPool.includes(y) && !usedA.has(x) && !usedB.has(y)) {
+        usedA.add(x); usedB.add(y); out.push([x, y]);
+      }
+    });
+    const restA = aPool.filter(p => !usedA.has(p));
+    const restB = bPool.filter(p => !usedB.has(p));
+    while (restA.length && restB.length) out.push([restA.shift(), restB.shift()]);
+    return out;
+  });
+}
+
 /* ─── HANDICAPS ──────────────────────────────────────────────── */
 const ALLOWANCE = 0.9;
 const playing = raw => raw==="" || raw==null ? 0 : Math.round(Number(raw) * ALLOWANCE);
@@ -81,8 +104,19 @@ function strokesOnHole(chc, rank) {
   return -(Math.floor(a/18) + (rank > 18-(a%18) ? 1 : 0));
 }
 const netOf = (gross, chc, rank) => gross==null ? null : gross - strokesOnHole(chc, rank);
+/* Custom Stableford scale (net result against par):
+   double bogey or worse -1 · bogey 0 · par 2 · birdie 4 · eagle 7 · albatross 10 */
+const SF_TABLE = [
+  { d:-3, pts:10, label:"Albatross" },
+  { d:-2, pts:7,  label:"Eagle" },
+  { d:-1, pts:4,  label:"Birdie" },
+  { d: 0, pts:2,  label:"Par" },
+  { d: 1, pts:0,  label:"Bogey" },
+  { d: 2, pts:-1, label:"Double+" },
+];
 const sfPts = (net, par) => net==null ? null
-  : (net-par<=-3 ? 5 : net-par===-2 ? 4 : net-par===-1 ? 3 : net-par===0 ? 2 : net-par===1 ? 1 : 0);
+  : (net-par <= -3 ? 10 : net-par === -2 ? 7 : net-par === -1 ? 4
+     : net-par === 0 ? 2 : net-par === 1 ? 0 : -1);
 
 function sideValue(pick, players, h, ctx) {
   const { scores, chc, course } = ctx;
@@ -145,9 +179,11 @@ function buildMatches(round, groups, pairs) {
   if (f.scope === "group")
     return groups.map((g,i)=>({ key:`g${i}`, group:i,
       a:g.filter(p=>teamOf(p)==="A"), b:g.filter(p=>teamOf(p)==="B") }));
-  if (f.scope === "group2")
-    return groups.flatMap((g,i)=>(pairs[i]||[]).map((pr,j)=>({
+  if (f.scope === "group2") {
+    const fixed = resolvePairs(groups, pairs);
+    return groups.flatMap((g,i)=>fixed[i].map((pr,j)=>({
       key:`g${i}m${j}`, group:i, a:[pr[0]], b:[pr[1]] })));
+  }
   return [{ key:"all", group:null, a:TEAM_A.players, b:TEAM_B.players }];
 }
 
@@ -161,23 +197,32 @@ function evalRound(round, st, hcpTable) {
      match gets zero strokes and everyone else gets the difference.
      2v2 uses the four in that foursome, the 4v4 uses all eight,
      singles uses the two in that match. */
-  const rel = {};
+  const rel = {}, oppOf = {};
   const results = buildMatches(round, st.groups, st.pairs).map(m => {
     const roster = [...m.a, ...m.b];
     const low = roster.length ? Math.min(...roster.map(p => chc[p])) : 0;
     const mRel = Object.fromEntries(roster.map(p => [p, chc[p] - low]));
     Object.assign(rel, mRel);
+    if (m.a.length === 1 && m.b.length === 1) { oppOf[m.a[0]] = m.b[0]; oppOf[m.b[0]] = m.a[0]; }
     const r = evalMatch(m, f, { scores: st.scores, chc: mRel, course });
     return { ...r, low, rel: mRel };
   });
 
   return {
-    results, chc, rel, f, course,
+    results, chc, rel, oppOf, f, course,
     aPts: results.reduce((t,r)=>t+r.aPts, 0),
     bPts: results.reduce((t,r)=>t+r.bPts, 0),
     played: Math.max(0, ...results.map(r=>r.played)),
   };
 }
+
+/* ─── LOCAL PREFS ────────────────────────────────────────────────
+   Per-device, not shared. Survives refresh so the app reopens where
+   you left it. Wrapped because private browsing can throw. */
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } },
+};
 
 /* ─── WRITE QUEUE ────────────────────────────────────────────────
    Every write goes through here. If a write fails — dead spot on the
@@ -227,8 +272,10 @@ function useWriteQueue() {
 
 /* ─── APP ────────────────────────────────────────────────────── */
 export default function App() {
-  const [tab,setTab] = useState("live");
-  const [roundN,setRoundN] = useState(1);
+  const [tab,setTab] = useState(() => LS.get("bets.tab", "live"));
+  const [roundN,setRoundN] = useState(() => LS.get("bets.round", 1));
+  useEffect(() => { LS.set("bets.round", roundN); }, [roundN]);
+  useEffect(() => { LS.set("bets.tab", tab); }, [tab]);
   const [hcpTable,setHcpTable] = useState(emptyHcp);
   const [state,setState] = useState(() => Object.fromEntries(ROUNDS.map(r => {
     const groups = clone(BASE_GROUPS);
@@ -269,6 +316,12 @@ export default function App() {
         return n;
       });
       if (a.data?.length) setArchive(a.data.map(r => r.payload));
+      /* First visit on this device: land on the round being played rather
+         than round 1 — the highest-numbered round that has any scores. */
+      if (LS.get("bets.round", null) == null && s.data?.length) {
+        const live = [...ROUNDS].reverse().find(r => s.data.some(x => x.round_n === r.n));
+        if (live) setRoundN(live.n);
+      }
       setLoaded(true);
     })();
     return () => { dead = true; };
@@ -405,8 +458,9 @@ export default function App() {
       </header>
       <div className="roundbar">
         <select value={roundN} onChange={e=>setRoundN(+e.target.value)}>
-          {ROUNDS.map(r=><option key={r.n} value={r.n}>
-            R{r.n} · {COURSES[r.course].short} · {FORMATS[r.format].label}</option>)}
+          {ROUNDS.map((r,i)=><option key={r.n} value={r.n}>
+            R{r.n} · {COURSES[r.course].short} · {FORMATS[r.format].label}
+            {allEv[i].played ? ` · thru ${allEv[i].played}` : ""}</option>)}
         </select>
         <div className="rmeta">{round.day} · {round.time} · {round.tee} tees · {roundPts(round)} pts</div>
       </div>
@@ -417,7 +471,7 @@ export default function App() {
       </nav>
       {!loaded && <div className="loading">Loading scores…</div>}
       {tab==="live"    && <Live round={round} ev={ev} totals={totals} allEv={allEv}/>}
-      {tab==="round"   && <Round key={roundN} round={round} st={st} ev={ev} setScore={setScore}
+      {tab==="round"   && <Round key={`${roundN}-${loaded}`} round={round} st={st} ev={ev} setScore={setScore}
                             clearScores={clearScores} moveToGroup={moveToGroup} hasScores={hasScores}
                             setPairs={setPairs} onArchive={saveToArchive}
                             archived={archive.some(a=>a.roundN===roundN)}/>}
@@ -571,10 +625,31 @@ function Handicaps({ hcpTable, setHcp }) {
 /* ─── ROUND ──────────────────────────────────────────────────── */
 function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, setPairs, onArchive, archived }) {
   const [open,setOpen] = useState(!hasScores);
-  const [mode,setMode] = useState("card");
-  const [hole,setHole] = useState(0);
+  const [mode,setMode] = useState(() => LS.get("bets.mode", "card"));
+  /* Reopen on the hole you were last on. Failing that, the first hole the
+     group hasn't finished — which is where you actually are on the course. */
+  const [hole,setHole] = useState(() => {
+    const saved = LS.get(`bets.hole.${round.n}`, null);
+    if (saved != null && saved >= 0 && saved < 18) return saved;
+    const roster = st.groups.flat();
+    for (let i=0; i<18; i++)
+      if (!roster.length || !roster.every(p => st.scores[p][i] != null)) return i;
+    return 17;
+  });
+  useEffect(() => { LS.set(`bets.hole.${round.n}`, hole); }, [hole, round.n]);
+  useEffect(() => { LS.set("bets.mode", mode); }, [mode]);
   const f = ev.f, course = ev.course;
   const missing = ALL.filter(p => ev.chc[p] === 0);
+  const resolved = useMemo(() => resolvePairs(st.groups, st.pairs), [st.groups, st.pairs]);
+  /* Picking a name already used in the other match trades the two players
+     rather than leaving someone out of a match entirely. */
+  const swapPair = (gi, j, side, value) => {
+    const pairs = clone(resolved);
+    const other = pairs[gi].findIndex((pr,k) => k !== j && pr[side] === value);
+    if (other >= 0) pairs[gi][other][side] = pairs[gi][j][side];
+    pairs[gi][j][side] = value;
+    setPairs(pairs);
+  };
 
   return (
     <div className="pad">
@@ -603,23 +678,25 @@ function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, s
 
           {f.scope==="group2" && (<>
             <div className="sethead">Singles matchups</div>
-            {st.groups.map((g,gi)=>(
+            {resolved.map((prs,gi)=>(
               <div className="grpbox" key={gi}>
                 <div className="grpname">Group {gi+1}</div>
-                {(st.pairs[gi]||[]).map((pr,j)=>(
+                {prs.map((pr,j)=>(
                   <div className="pairrow" key={j}>
-                    <select className="pA" value={pr[0]} onChange={e=>{
-                      const pairs=clone(st.pairs); pairs[gi][j][0]=e.target.value; setPairs(pairs);}}>
-                      {g.filter(p=>teamOf(p)==="A").map(p=><option key={p}>{p}</option>)}
+                    <select className="pA" value={pr[0]}
+                      onChange={e=>swapPair(gi, j, 0, e.target.value)}>
+                      {st.groups[gi].filter(p=>teamOf(p)==="A").map(p=><option key={p}>{p}</option>)}
                     </select>
                     <span className="vs">v</span>
-                    <select className="pB" value={pr[1]} onChange={e=>{
-                      const pairs=clone(st.pairs); pairs[gi][j][1]=e.target.value; setPairs(pairs);}}>
-                      {g.filter(p=>teamOf(p)==="B").map(p=><option key={p}>{p}</option>)}
+                    <select className="pB" value={pr[1]}
+                      onChange={e=>swapPair(gi, j, 1, e.target.value)}>
+                      {st.groups[gi].filter(p=>teamOf(p)==="B").map(p=><option key={p}>{p}</option>)}
                     </select>
                   </div>))}
-                {!(st.pairs[gi]||[]).length && <span className="hint">Needs a player from each team.</span>}
+                {!prs.length && <span className="hint">Needs a player from each team.</span>}
               </div>))}
+            <div className="hint">Each match strokes off the lower of its own two handicaps.
+              Picking a name that's already in the other match swaps the two.</div>
           </>)}
         </div>
       )}
@@ -658,6 +735,16 @@ function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, s
   );
 }
 
+const SfKey = () => (
+  <div className="sfkey">
+    {SF_TABLE.map(r => (
+      <div className="sfk" key={r.label}>
+        <span className="sfk-l">{r.label}</span>
+        <span className={"sfk-p"+(r.pts<0?" neg":"")}>{r.pts>0?"+":""}{r.pts}</span>
+      </div>))}
+  </div>
+);
+
 /* one foursome */
 function GroupCard({ gi, group, st, ev, setScore }) {
   const f = ev.f, course = ev.course;
@@ -678,19 +765,23 @@ function GroupCard({ gi, group, st, ev, setScore }) {
           <tbody>
             {group.map(p=>{
               const g = st.scores[p];
-              const sk = ev.rel[p] ?? ev.chc[p];
+              const sk = ev.rel[p];
+              const inPlay = sk != null;
+              const opp = ev.oppOf?.[p];
               return (
-                <tr key={p} className={"t"+teamOf(p)}>
-                  <th className="stick">{p} <em className={sk===0?"scr":""}>{sk}</em></th>
+                <tr key={p} className={"t"+teamOf(p)+(inPlay?"":" idle")}>
+                  <th className="stick">{p}
+                    {opp && <b className="opp">v {opp}</b>}
+                    <em className={!inPlay ? "none" : sk===0 ? "scr" : ""}>{inPlay ? sk : "—"}</em></th>
                   {H.map(h=>{
-                    const nt = netOf(g[h], sk, course.hcp[h]);
+                    const nt = inPlay ? netOf(g[h], sk, course.hcp[h]) : null;
                     return (
                       <td key={h} className={"cell "+cls(g[h],course.par[h])}>
                         <input inputMode="numeric" value={g[h] ?? ""} onChange={e=>{
                           const v=e.target.value.replace(/\D/g,"");
                           setScore(p,h,v===""?null:Math.min(19,+v));}}/>
                         {nt!=null && <i className="netbadge">{nt}</i>}
-                        {strokesOnHole(sk,course.hcp[h])>0 &&
+                        {inPlay && strokesOnHole(sk,course.hcp[h])>0 &&
                           <i className="dots">{"•".repeat(Math.min(strokesOnHole(sk,course.hcp[h]),3))}</i>}
                       </td>);
                   })}
@@ -709,6 +800,7 @@ function GroupCard({ gi, group, st, ev, setScore }) {
         <span>strokes off the low handicap in the match</span>
         {f.mode==="holes" && <><span>▲ {TEAM_A.short}</span><span>▼ {TEAM_B.short}</span></>}
       </div>
+      {f.pick==="sfsum" && <SfKey/>}
       {mine.map(m => (
         <div className="matchfoot" key={m.key}>
           <div className="mf-h">{m.a.join(" & ")} <span>v</span> {m.b.join(" & ")}</div>
@@ -813,16 +905,19 @@ function HoleEntry({ st, ev, hole, setHole, setScore }) {
           <div className="ghline">Group {gi+1}</div>
           {g.map(p=>{
             const v = st.scores[p][hole];
-            const sk = ev.rel[p] ?? ev.chc[p];
-            const nt = netOf(v, sk, course.hcp[hole]);
+            const sk = ev.rel[p];
+            const inPlay = sk != null;
+            const opp = ev.oppOf?.[p];
+            const nt = inPlay ? netOf(v, sk, course.hcp[hole]) : null;
             const sp = ev.f.pick==="sfsum" ? sfPts(nt, par) : null;
-            const gets = strokesOnHole(sk, course.hcp[hole]);
+            const gets = inPlay ? strokesOnHole(sk, course.hcp[hole]) : 0;
             return (
-              <div className={"erow t"+teamOf(p)} key={p}>
-                <div className="ename">{p}
-                  <em>{nt!=null
-                    ? `net ${nt}${sp!=null?` · ${sp} pt${sp===1?"":"s"}`:""}`
-                    : `${sk} strokes${gets?` · ${gets} here`:""}`}</em></div>
+              <div className={"erow t"+teamOf(p)+(inPlay?"":" idle")} key={p}>
+                <div className="ename">{p}{opp && <b className="opp">v {opp}</b>}
+                  <em>{!inPlay ? "not in a match"
+                    : nt!=null
+                      ? `net ${nt}${sp!=null?` · ${sp} pt${Math.abs(sp)===1?"":"s"}`:""}`
+                      : `${sk} strokes${gets?` · ${gets} here`:""}`}</em></div>
                 <ScoreStrip value={v} par={par} onPick={n=>setScore(p,hole,n)}/>
               </div>);
           })}
@@ -995,9 +1090,8 @@ function Stats({ archive }) {
       </div></div>
       <div className="swipe">Swipe the table sideways for the rest of the columns</div>
       <p className="note">Averages scale to 18 holes so partial rounds stay comparable. Every column
-        follows the basis you pick — gross Stableford scores off the card, net Stableford applies each
-        player's full {Math.round(ALLOWANCE*100)}% handicap. Gross Stableford totals will look low,
-        since a scratch scoring table is unforgiving to a mid handicap.</p>
+        follows the basis you pick. Stbl uses the trip's own scale — double or worse −1, bogey 0,
+        par 2, birdie 4, eagle 7, albatross 10 — so gross totals can run negative.</p>
     </div>
   );
 }
@@ -1193,6 +1287,10 @@ table.card thead th{font-family:'Saira Condensed';font-size:11px;letter-spacing:
 .stick em{color:var(--mut);font-style:normal;font-size:10px;background:var(--paper);
  border-radius:4px;padding:1px 4px;margin-left:3px;}
 .stick em.scr{background:var(--ink);color:var(--paper);}
+.stick em.none{background:transparent;color:var(--mut);}
+.opp{display:block;font-size:9.5px;font-weight:500;color:var(--mut);letter-spacing:.2px;}
+tr.idle input,tr.idle .stick{opacity:.55;}
+.erow.idle{opacity:.6;}
 tr.par td{background:var(--paper);font-weight:600;}
 tr.hcp td{color:var(--mut);font-size:10px;}
 tr.tA .stick{border-left:3px solid var(--blue);}
@@ -1220,6 +1318,12 @@ td.rA{background:var(--blueF);color:var(--blue);}
 td.rB{background:var(--rustF);color:var(--rust);}
 td.rH{color:var(--mut);}
 .legend{display:flex;gap:11px;flex-wrap:wrap;font-size:10.5px;color:var(--mut);padding:8px 12px;}
+.sfkey{display:flex;gap:5px;flex-wrap:wrap;padding:0 12px 12px;}
+.sfk{display:flex;align-items:center;gap:5px;background:var(--paper);border:1px solid var(--rule);
+ border-radius:6px;padding:4px 8px;font-size:10.5px;}
+.sfk-l{color:var(--mut);}
+.sfk-p{font-weight:700;font-variant-numeric:tabular-nums;color:var(--blue);}
+.sfk-p.neg{color:var(--rust);}
 .legend b{color:var(--ink);}
 .lgnet{color:var(--blue);}
 
