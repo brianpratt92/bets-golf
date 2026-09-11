@@ -708,6 +708,22 @@ function Round({ round, st, ev, setScore, clearScores, moveToGroup, hasScores, s
         <div className="warn">No course handicap set for {missing.join(", ")} at {COURSES[round.course].short}.
           They're playing scratch until you fill the Hcps tab.</div>}
 
+      {f.scope==="group2" && (
+        <div className="strokekey">
+          <div className="sk-h">Strokes this round — each match off its own low handicap</div>
+          {ev.results.map(m => {
+            const A0=m.a[0], B0=m.b[0];
+            const gA=m.rel[A0], gB=m.rel[B0];
+            const gets = gA>0 ? `${A0} gets ${gA}` : gB>0 ? `${B0} gets ${gB}` : "no strokes";
+            return (
+              <div className="sk-r" key={m.key}>
+                <span>{A0} <i>{ev.chc[A0]}</i> v {B0} <i>{ev.chc[B0]}</i></span>
+                <b>{gets}</b>
+              </div>);
+          })}
+          <div className="hint">Small numbers are each player's full {Math.round(ALLOWANCE*100)}% handicap from the Hcps tab.</div>
+        </div>)}
+
       <div className="modebar">
         <button className={mode==="card"?"on":""} onClick={()=>setMode("card")}>Full card</button>
         <button className={mode==="hole"?"on":""} onClick={()=>setMode("hole")}>One hole</button>
@@ -822,22 +838,28 @@ function GroupCard({ gi, group, st, ev, setScore }) {
 function CountRows({ m, ev }) {
   const H = Array.from({length:18},(_,i)=>i);
   const label = ev.f.pick==="sfsum" ? "pts" : "net";
+  const solo = m.a.length===1 && m.b.length===1;
+  /* In a 1v1 the counting value IS the player's own net, already shown on
+     his row, so repeating it twice just clutters the card. Show the hole
+     result instead, named after the pairing. */
   return (<>
-    <tr className="cntrow tA">
-      <th className="stick">{TEAM_A.short} {label}</th>
-      {H.map(h=><td key={h} className={m.holes[h].w==="A"?"rA":""}>{m.holes[h].a ?? "·"}</td>)}
-      <td className="tot">{segTot(m,0,9,"a")}</td><td className="tot">{segTot(m,9,18,"a")}</td>
-      <td className="tot">{segTot(m,0,18,"a")}</td>
-    </tr>
-    <tr className="cntrow tB">
-      <th className="stick">{TEAM_B.short} {label}</th>
-      {H.map(h=><td key={h} className={m.holes[h].w==="B"?"rB":""}>{m.holes[h].b ?? "·"}</td>)}
-      <td className="tot">{segTot(m,0,9,"b")}</td><td className="tot">{segTot(m,9,18,"b")}</td>
-      <td className="tot">{segTot(m,0,18,"b")}</td>
-    </tr>
+    {!solo && (<>
+      <tr className="cntrow tA">
+        <th className="stick">{TEAM_A.short} {label}</th>
+        {H.map(h=><td key={h} className={m.holes[h].w==="A"?"rA":""}>{m.holes[h].a ?? "·"}</td>)}
+        <td className="tot">{segTot(m,0,9,"a")}</td><td className="tot">{segTot(m,9,18,"a")}</td>
+        <td className="tot">{segTot(m,0,18,"a")}</td>
+      </tr>
+      <tr className="cntrow tB">
+        <th className="stick">{TEAM_B.short} {label}</th>
+        {H.map(h=><td key={h} className={m.holes[h].w==="B"?"rB":""}>{m.holes[h].b ?? "·"}</td>)}
+        <td className="tot">{segTot(m,0,9,"b")}</td><td className="tot">{segTot(m,9,18,"b")}</td>
+        <td className="tot">{segTot(m,0,18,"b")}</td>
+      </tr>
+    </>)}
     {ev.f.mode==="holes" && (
       <tr className="resrow">
-        <th className="stick">Hole</th>
+        <th className="stick">{solo ? `${m.a[0]} v ${m.b[0]}` : "Hole"}</th>
         {H.map(h=>{
           const w = m.holes[h].w;
           return <td key={h} className={"res "+(w==="A"?"rA":w==="B"?"rB":w==="H"?"rH":"")}>
@@ -1259,6 +1281,16 @@ select{font-family:Inter;font-size:13px;font-weight:600;color:var(--ink);border:
 .vs{font-family:'Saira Condensed';color:var(--mut);font-size:13px;}
 .clearbtn{width:100%;margin-top:14px;padding:10px;border:1px solid var(--rule);background:var(--paper);
  color:var(--rust);border-radius:8px;font-family:Inter;font-size:12.5px;font-weight:600;cursor:pointer;}
+.strokekey{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:11px 12px;margin-bottom:10px;}
+.sk-h{font-family:'Saira Condensed';font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;
+ color:var(--mut);margin-bottom:7px;}
+.sk-r{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:12.5px;
+ padding:4px 0;border-top:1px solid var(--rule);}
+.sk-r i{font-style:normal;font-size:10px;color:var(--mut);background:var(--paper);
+ border-radius:4px;padding:1px 4px;}
+.sk-r b{font-variant-numeric:tabular-nums;white-space:nowrap;}
+.strokekey .hint{margin-top:7px;}
+
 .endbar{margin-top:6px;}
 .clearbtn.wide{margin-top:8px;}
 .resetbox{margin-top:18px;background:#fff;border:1px dashed var(--rule);border-radius:12px;padding:13px;}
